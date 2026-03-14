@@ -12,7 +12,7 @@ export default function AIAssistant() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || profile?.subscriptionPlan === 'free') {
+    if (!user || (profile?.subscriptionPlan === 'free' && profile?.role !== 'admin')) {
       setLoading(false);
       return;
     }
@@ -71,7 +71,7 @@ Keep up the great work!
     fetchInsights();
   }, [user, profile]);
 
-  if (profile?.subscriptionPlan === 'free') {
+  if (profile?.subscriptionPlan === 'free' && profile?.role !== 'admin') {
     return (
       <div className="max-w-2xl mx-auto py-24 text-center space-y-8 font-sans">
         <div className="w-24 h-24 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner shadow-orange-500/20 border border-orange-500/20">

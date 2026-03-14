@@ -4,7 +4,7 @@ import { MessageSquare, Lock } from 'lucide-react';
 export default function Messages() {
   const { profile } = useAuth();
 
-  if (profile?.subscriptionPlan === 'free') {
+  if (profile?.subscriptionPlan === 'free' && profile?.role !== 'admin') {
     return (
       <div className="max-w-2xl mx-auto py-24 text-center space-y-8 font-sans">
         <div className="w-24 h-24 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner shadow-white/5">
