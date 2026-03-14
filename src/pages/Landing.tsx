@@ -33,45 +33,58 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="relative pt-40 pb-24 px-6 max-w-7xl mx-auto text-center overflow-hidden">
         {/* Animated Background Elements */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-          <motion.div 
-            animate={{ y: [0, -20, 0], rotate: [0, 10, 0] }} 
-            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-20 left-[10%] bg-white dark:bg-zinc-800 p-4 rounded-3xl shadow-xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
-          >
-            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-500/20 rounded-full flex items-center justify-center">
-              <Utensils className="w-5 h-5 text-orange-500" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-bold">Avocado Toast</p>
-              <p className="text-xs text-zinc-500">Healthy Fat</p>
-            </div>
-          </motion.div>
+        <div className="absolute inset-0 pointer-events-none z-0 flex justify-center overflow-hidden">
+          <div className="w-full max-w-7xl relative h-full">
+            <motion.div 
+              animate={{ y: [0, -15, 0], x: [0, 10, 0], rotate: [-4, 4, -4] }} 
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute top-20 md:top-32 left-[-20px] md:left-8 lg:left-12 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md p-4 rounded-3xl shadow-2xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
+            >
+              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-500/20 rounded-full flex items-center justify-center">
+                <Utensils className="w-5 h-5 text-orange-500" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-zinc-900 dark:text-white">Avocado Toast</p>
+                <p className="text-xs text-zinc-500">Healthy Fat</p>
+              </div>
+            </motion.div>
 
-          <motion.div 
-            animate={{ y: [0, 20, 0], rotate: [0, -10, 0] }} 
-            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-            className="absolute top-40 right-[10%] bg-white dark:bg-zinc-800 p-4 rounded-3xl shadow-xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
-          >
-            <div className="text-left">
-              <p className="text-sm font-bold">Health Score</p>
-              <p className="text-xs text-emerald-500 font-medium">Excellent</p>
-            </div>
-            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-full flex items-center justify-center">
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">98</span>
-            </div>
-          </motion.div>
+            <motion.div 
+              animate={{ y: [0, 20, 0], x: [0, -10, 0], rotate: [4, -4, 4] }} 
+              transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+              className="absolute top-40 md:top-48 right-[-20px] md:right-8 lg:right-12 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md p-4 rounded-3xl shadow-2xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
+            >
+              <div className="text-left">
+                <p className="text-sm font-bold text-zinc-900 dark:text-white">Health Score</p>
+                <p className="text-xs text-emerald-500 font-medium">Excellent</p>
+              </div>
+              <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-full flex items-center justify-center">
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">98</span>
+              </div>
+            </motion.div>
 
-          <motion.div 
-            animate={{ y: [0, -15, 0], scale: [1, 1.05, 1] }} 
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-            className="absolute bottom-20 left-[20%] bg-white dark:bg-zinc-800 p-3 rounded-full shadow-xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-2"
-          >
-            <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/20 rounded-full flex items-center justify-center">
-              <Leaf className="w-4 h-4 text-purple-500" />
-            </div>
-            <span className="text-sm font-bold pr-2">Vegan Vibe</span>
-          </motion.div>
+            <motion.div 
+              animate={{ y: [0, -12, 0], x: [0, 15, 0], rotate: [-5, 0, -5] }} 
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+              className="absolute bottom-20 md:bottom-28 left-10 md:left-24 lg:left-32 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md p-3 rounded-full shadow-2xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-2"
+            >
+              <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/20 rounded-full flex items-center justify-center">
+                <Leaf className="w-4 h-4 text-purple-500" />
+              </div>
+              <span className="text-sm font-bold pr-2 text-zinc-900 dark:text-white">Vegan Vibe</span>
+            </motion.div>
+
+            <motion.div 
+              animate={{ y: [0, 15, 0], x: [0, -15, 0], rotate: [5, -2, 5] }} 
+              transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut", delay: 3 }}
+              className="absolute bottom-32 md:bottom-40 right-10 md:right-24 lg:right-32 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md p-3 rounded-full shadow-2xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-2"
+            >
+              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-500/20 rounded-full flex items-center justify-center">
+                <Activity className="w-4 h-4 text-blue-500" />
+              </div>
+              <span className="text-sm font-bold pr-2 text-zinc-900 dark:text-white">High Protein</span>
+            </motion.div>
+          </div>
         </div>
 
         <motion.div
