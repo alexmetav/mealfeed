@@ -16,7 +16,7 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "shahidmalikagra@gmail.com" && request.auth.token.email_verified == true));
+          (request.auth.token.email == "alexmetav@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function uidUnchanged() {
@@ -39,7 +39,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'username', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'lastActionDate']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'username', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'lastActionDate', 'checkInHistory', 'isCreator', 'referralCode', 'referredBy', 'referralsCount', 'followersCount', 'followingCount', 'postsCount']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
              data.email is string && isValidEmail(data.email) &&
              data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
@@ -55,11 +55,19 @@ service cloud.firestore {
              (!('dailyLikesCount' in data) || data.dailyLikesCount is number) &&
              (!('dailyCommentsCount' in data) || data.dailyCommentsCount is number) &&
              (!('lastActionDate' in data) || data.lastActionDate is string) &&
+             (!('checkInHistory' in data) || data.checkInHistory is list) &&
+             (!('isCreator' in data) || data.isCreator is bool) &&
+             (!('referralCode' in data) || data.referralCode is string) &&
+             (!('referredBy' in data) || data.referredBy is string) &&
+             (!('referralsCount' in data) || data.referralsCount is number) &&
+             (!('followersCount' in data) || data.followersCount is number) &&
+             (!('followingCount' in data) || data.followingCount is number) &&
+             (!('postsCount' in data) || data.postsCount is number) &&
              data.createdAt is string; // ISO string
     }
 
     function isValidPost(data) {
-      return hasOnlyAllowedFields(['userId', 'authorName', 'authorImage', 'imageUrl', 'foodType', 'category', 'healthRating', 'healthScore', 'caption', 'likesCount', 'commentsCount', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'authorName', 'authorImage', 'imageUrl', 'foodType', 'category', 'healthRating', 'healthScore', 'caption', 'likesCount', 'commentsCount', 'createdAt', 'calories', 'protein', 'carbs', 'fat', 'authorIsCreator']) &&
              data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
              data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 50 &&
              (!('authorImage' in data) || (data.authorImage is string && data.authorImage.size() < 1000000)) &&
@@ -71,6 +79,11 @@ service cloud.firestore {
              (!('caption' in data) || (data.caption is string && data.caption.size() < 1000)) &&
              data.likesCount is number && data.likesCount >= 0 &&
              data.commentsCount is number && data.commentsCount >= 0 &&
+             (!('calories' in data) || data.calories is number) &&
+             (!('protein' in data) || data.protein is number) &&
+             (!('carbs' in data) || data.carbs is number) &&
+             (!('fat' in data) || data.fat is number) &&
+             (!('authorIsCreator' in data) || data.authorIsCreator is bool) &&
              data.createdAt is string;
     }
 

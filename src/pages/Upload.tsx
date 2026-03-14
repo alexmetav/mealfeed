@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UploadCloud, X, Loader2, CheckCircle2 } from 'lucide-react';
+import { GoogleGenAI, Type } from '@google/genai';
 
 interface FoodAnalysisResult {
   foodType: string;
@@ -11,6 +12,10 @@ interface FoodAnalysisResult {
   healthRating: 'High' | 'Medium' | 'Low';
   healthScore: number;
   healthTips: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 }
 
 export default function Upload() {
@@ -67,18 +72,57 @@ export default function Upload() {
   const handleAnalyze = async () => {
     if (!image) return;
     setLoading(true);
-    // Mocking analysis as requested to process without AI feature for now
-    setTimeout(() => {
-      const mockResult: FoodAnalysisResult = {
-        foodType: "Delicious Meal",
-        category: "Healthy Choice",
-        healthRating: "High",
-        healthScore: 85,
-        healthTips: "This looks like a well-balanced meal. Keep up the good work!"
-      };
-      setAnalysis(mockResult);
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const base64Data = image.split(',')[1];
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data,
+              },
+            },
+            {
+              text: "Analyze this food image. Provide the food type, category, health rating (High, Medium, Low), a health score out of 100, health tips, and estimated nutritional values (calories, protein, carbs, fat in grams).",
+            },
+          ],
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              foodType: { type: Type.STRING, description: "Name of the food" },
+              category: { type: Type.STRING, description: "Category like Breakfast, Lunch, Snack, etc." },
+              healthRating: { type: Type.STRING, description: "Must be exactly 'High', 'Medium', or 'Low'" },
+              healthScore: { type: Type.INTEGER, description: "Score from 0 to 100" },
+              healthTips: { type: Type.STRING, description: "Short health tip" },
+              calories: { type: Type.INTEGER, description: "Estimated calories" },
+              protein: { type: Type.INTEGER, description: "Estimated protein in grams" },
+              carbs: { type: Type.INTEGER, description: "Estimated carbs in grams" },
+              fat: { type: Type.INTEGER, description: "Estimated fat in grams" },
+            },
+            required: ["foodType", "category", "healthRating", "healthScore", "healthTips", "calories", "protein", "carbs", "fat"],
+          },
+        },
+      });
+
+      const resultText = response.text;
+      if (resultText) {
+        const parsedResult = JSON.parse(resultText) as FoodAnalysisResult;
+        setAnalysis(parsedResult);
+      }
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      alert("Failed to analyze image. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   const handlePost = async () => {
@@ -91,15 +135,28 @@ export default function Upload() {
         userId: user.uid,
         authorName: profile.username,
         authorImage: profile.profileImage,
+        authorIsCreator: profile.isCreator || false,
         imageUrl: image,
         foodType: analysis.foodType,
         category: analysis.category,
         healthRating: analysis.healthRating,
         healthScore: analysis.healthScore,
+        calories: analysis.calories,
+        protein: analysis.protein,
+        carbs: analysis.carbs,
+        fat: analysis.fat,
         caption,
         likesCount: 0,
         commentsCount: 0,
         createdAt: new Date().toISOString(),
+      });
+      
+      // Reward user with 100 points for uploading
+      const userRef = doc(db, 'users', user.uid);
+      const pointsToEarn = profile.isCreator ? 200 : 100;
+      await updateDoc(userRef, {
+        points: increment(pointsToEarn),
+        postsCount: increment(1)
       });
       
       navigate('/dashboard');
@@ -178,6 +235,25 @@ export default function Upload() {
                   <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Score</p>
                     <p className="font-semibold text-2xl text-orange-500 tracking-tight">{analysis.healthScore}<span className="text-sm text-zinc-500 font-medium">/100</span></p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-zinc-200 dark:border-white/10">
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Calories</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.calories}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Protein</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.protein}g</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Carbs</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.carbs}g</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Fat</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.fat}g</p>
                   </div>
                 </div>
                 

@@ -20,6 +20,14 @@ interface UserProfile {
   dailyLikesCount: number;
   dailyCommentsCount: number;
   lastActionDate?: string;
+  checkInHistory?: string[];
+  referralCode?: string;
+  referredBy?: string;
+  referralsCount?: number;
+  followersCount?: number;
+  followingCount?: number;
+  postsCount?: number;
+  isCreator?: boolean;
 }
 
 interface AuthContextType {
@@ -70,10 +78,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userSnap = await getDoc(userRef);
           
           if (userSnap.exists()) {
-            setProfile(userSnap.data() as UserProfile);
+            const data = userSnap.data() as UserProfile;
+            
+            // Auto-upgrade alexmetav@gmail.com to admin if they aren't already
+            if (currentUser.email === "alexmetav@gmail.com" && data.role !== 'admin') {
+              data.role = 'admin';
+              await setDoc(userRef, { role: 'admin' }, { merge: true });
+            }
+            
+            setProfile(data);
           } else {
             // Create new user profile
-            const isAdminEmail = currentUser.email === "shahidmalikagra@gmail.com";
+            const isAdminEmail = currentUser.email === "alexmetav@gmail.com";
             const newProfile: UserProfile = {
               uid: currentUser.uid,
               email: currentUser.email || '',
@@ -87,6 +103,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               streak: 0,
               dailyLikesCount: 0,
               dailyCommentsCount: 0,
+              referralCode: currentUser.uid.slice(0, 8).toUpperCase(),
+              referralsCount: 0,
+              followersCount: 0,
+              followingCount: 0,
+              postsCount: 0,
+              isCreator: false,
             };
             await setDoc(userRef, newProfile);
             setProfile(newProfile);

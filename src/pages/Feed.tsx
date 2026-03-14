@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Heart, MessageCircle, Bookmark, MapPin } from 'lucide-react';
@@ -17,10 +17,15 @@ interface Post {
   category: string;
   healthRating: string;
   healthScore: number;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
   caption?: string;
   likesCount: number;
   commentsCount: number;
   createdAt: string;
+  authorIsCreator?: boolean;
 }
 
 export default function Feed() {
@@ -28,6 +33,16 @@ export default function Feed() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [following, setFollowing] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'follows'), where('followerId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      setFollowing(new Set(snap.docs.map(d => d.data().followingId)));
+    });
+    return () => unsub();
+  }, [user]);
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50));
@@ -42,6 +57,38 @@ export default function Feed() {
 
     return () => unsubscribe();
   }, []);
+
+  const handleFollow = async (authorId: string, authorName: string, authorImage?: string) => {
+    if (!user || !profile || authorId === user.uid) return;
+    const followId = `${user.uid}_${authorId}`;
+    const followRef = doc(db, 'follows', followId);
+    const authorRef = doc(db, 'users', authorId);
+    const userRef = doc(db, 'users', user.uid);
+
+    try {
+      if (following.has(authorId)) {
+        // Unfollow
+        await deleteDoc(followRef);
+        await updateDoc(authorRef, { followersCount: increment(-1) });
+        await updateDoc(userRef, { followingCount: increment(-1) });
+      } else {
+        // Follow
+        await setDoc(followRef, { 
+          followerId: user.uid, 
+          followerName: profile.username,
+          followerImage: profile.profileImage || '',
+          followingId: authorId, 
+          followingName: authorName,
+          followingImage: authorImage || '',
+          createdAt: new Date().toISOString() 
+        });
+        await updateDoc(authorRef, { followersCount: increment(1) });
+        await updateDoc(userRef, { followingCount: increment(1) });
+      }
+    } catch (error) {
+      console.error('Error following:', error);
+    }
+  };
 
   const handleLike = async (postId: string, authorId: string) => {
     if (!user || !profile) return;
@@ -82,16 +129,18 @@ export default function Feed() {
         await updateDoc(postRef, { likesCount: increment(1) });
         
         // Update points and counts
+        const pointsToEarn = profile.isCreator ? 100 : 50;
         await updateDoc(userRef, {
-          points: increment(100),
+          points: increment(pointsToEarn),
           dailyLikesCount: isNewDay ? 1 : increment(1),
           lastActionDate: today
         });
 
         // Reward author if it's not the same user
         if (authorId !== user.uid) {
+          // We don't know if author is creator here easily without fetching, so just give them 50
           await updateDoc(authorRef, {
-            points: increment(100)
+            points: increment(50)
           });
         }
 
@@ -135,8 +184,9 @@ export default function Feed() {
       await updateDoc(postRef, { commentsCount: increment(1) });
 
       // Update points and counts
+      const pointsToEarn = profile.isCreator ? 1000 : 500;
       await updateDoc(userRef, {
-        points: increment(500),
+        points: increment(pointsToEarn),
         dailyCommentsCount: isNewDay ? 1 : increment(1),
         lastActionDate: today
       });
@@ -188,6 +238,17 @@ export default function Feed() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-zinc-900 dark:text-white tracking-tight">{post.authorName}</span>
+                    {post.authorIsCreator && (
+                      <span className="text-[10px] px-2 py-0.5 bg-blue-500 text-white font-bold rounded-full uppercase tracking-wider shadow-sm shadow-blue-500/20">Creator</span>
+                    )}
+                    {post.userId !== user?.uid && (
+                      <button 
+                        onClick={() => handleFollow(post.userId, post.authorName, post.authorImage)}
+                        className={clsx("text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors uppercase tracking-wider", following.has(post.userId) ? "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white" : "bg-orange-500 text-white")}
+                      >
+                        {following.has(post.userId) ? 'Following' : 'Follow'}
+                      </button>
+                    )}
                     {/* Premium Badge Mock */}
                     {post.healthScore > 80 && (
                       <span className="text-[10px] px-2 py-0.5 bg-orange-500 text-white font-bold rounded-full uppercase tracking-wider shadow-sm shadow-orange-500/20">Pro</span>
@@ -201,7 +262,7 @@ export default function Feed() {
             </div>
 
             {/* Image */}
-            <div className="relative aspect-square bg-zinc-50 dark:bg-black">
+            <div className="relative aspect-square bg-zinc-50 dark:bg-black group">
               <img 
                 src={post.imageUrl} 
                 alt={post.foodType}
@@ -221,10 +282,28 @@ export default function Feed() {
                   {post.healthRating} Health
                 </span>
               </div>
-              <div className="absolute bottom-4 left-4">
-                <div className="px-4 py-2 bg-emerald-500 text-white rounded-full text-xs font-bold shadow-lg shadow-emerald-900/40 border border-emerald-400/50">
+              <div className="absolute bottom-4 left-4 flex flex-col gap-2">
+                <div className="px-4 py-2 bg-emerald-500 text-white rounded-full text-xs font-bold shadow-lg shadow-emerald-900/40 border border-emerald-400/50 w-fit">
                   Health Score: {post.healthScore}
                 </div>
+                
+                {/* Nutritional Info Overlay */}
+                {post.calories !== undefined && (
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white text-xs font-medium border border-white/10 shadow-lg">
+                      <span className="text-zinc-400 mr-1">Cal</span>{post.calories}
+                    </div>
+                    <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white text-xs font-medium border border-white/10 shadow-lg">
+                      <span className="text-zinc-400 mr-1">Pro</span>{post.protein}g
+                    </div>
+                    <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white text-xs font-medium border border-white/10 shadow-lg">
+                      <span className="text-zinc-400 mr-1">Carb</span>{post.carbs}g
+                    </div>
+                    <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white text-xs font-medium border border-white/10 shadow-lg">
+                      <span className="text-zinc-400 mr-1">Fat</span>{post.fat}g
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -15,6 +15,8 @@ import AIAssistant from './pages/AIAssistant';
 import Admin from './pages/Admin';
 import Messages from './pages/Messages';
 import Subscription from './pages/Subscription';
+import Rewards from './pages/Rewards';
+import Recommendations from './pages/Recommendations';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -44,6 +46,8 @@ export default function App() {
                 <Route path="upload" element={<Upload />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="health" element={<Health />} />
+                <Route path="recommendations" element={<Recommendations />} />
+                <Route path="rewards" element={<Rewards />} />
                 <Route path="ai-assistant" element={<AIAssistant />} />
                 <Route path="admin" element={<Admin />} />
                 <Route path="messages" element={<Messages />} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Settings, Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck } from 'lucide-react';
@@ -51,10 +51,11 @@ export default function Profile() {
   const handleCheckIn = async () => {
     if (!user || !profile || checkInLoading) return;
     
-    const today = new Date().toISOString().split('T')[0];
-    const lastCheckInDate = profile.lastCheckIn?.split('T')[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const lastCheckInDate = profile.lastCheckIn?.split('T')[0]; // Keep for backward compatibility
 
-    if (lastCheckInDate === today) {
+    if (lastCheckInDate === today || profile.checkInHistory?.includes(today)) {
       alert('You already checked in today!');
       return;
     }
@@ -64,17 +65,19 @@ export default function Profile() {
       const userRef = doc(db, 'users', user.uid);
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
 
       let newStreak = 1;
-      if (lastCheckInDate === yesterdayStr) {
+      if (lastCheckInDate === yesterdayStr || profile.checkInHistory?.includes(yesterdayStr)) {
         newStreak = (profile.streak || 0) + 1;
       }
 
+      const pointsToEarn = profile.isCreator ? 2000 : 1000;
       await updateDoc(userRef, {
-        points: increment(1000), // Bonus for daily check-in
+        points: increment(pointsToEarn), // Bonus for daily check-in
         streak: newStreak,
-        lastCheckIn: new Date().toISOString()
+        lastCheckIn: new Date().toISOString(),
+        checkInHistory: arrayUnion(today)
       });
 
       await refreshProfile();
@@ -109,20 +112,25 @@ export default function Profile() {
 
         <div className="flex-1 text-center md:text-left">
           <div className="flex flex-col md:flex-row md:items-center gap-5 mb-6">
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-zinc-900 dark:text-white">{profile.username}</h1>
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-zinc-900 dark:text-white flex items-center gap-3">
+              {profile.username}
+              {profile.isCreator && (
+                <span className="text-xs px-3 py-1 bg-blue-500 text-white font-bold rounded-full uppercase tracking-wider shadow-sm shadow-blue-500/20">Creator</span>
+              )}
+            </h1>
             <div className="flex items-center justify-center gap-3">
               <button 
                 onClick={handleCheckIn}
-                disabled={checkInLoading || profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0]}
+                disabled={checkInLoading || profile.checkInHistory?.includes(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`) || profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0]}
                 className={clsx(
                   "flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 shadow-lg",
-                  profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0]
+                  (profile.checkInHistory?.includes(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`) || profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0])
                     ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 cursor-default"
                     : "bg-orange-600 text-white hover:bg-orange-500 shadow-orange-900/20"
                 )}
               >
                 <CalendarCheck className="w-4 h-4" />
-                {profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0] ? 'Checked In' : 'Daily Check-in'}
+                {(profile.checkInHistory?.includes(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`) || profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0]) ? 'Checked In' : 'Daily Check-in'}
               </button>
               <button className="p-2 bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 rounded-full text-zinc-900 dark:text-white transition-all duration-300 border border-zinc-200 dark:border-white/5 shadow-sm">
                 <Settings className="w-5 h-5" />
@@ -191,10 +199,18 @@ export default function Profile() {
           {posts.map(post => (
             <div key={post.id} className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl">
               <img src={post.imageUrl} alt={post.foodType} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-              <div className="absolute inset-0 bg-zinc-50 dark:bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-6 backdrop-blur-[2px]">
-                <div className="flex items-center gap-2 font-bold text-zinc-900 dark:text-white text-lg drop-shadow-md">
+              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
+                <div className="flex items-center gap-2 font-bold text-white text-lg drop-shadow-md">
                   <Heart className="w-6 h-6 fill-white" /> {post.likesCount}
                 </div>
+                {post.calories !== undefined && (
+                  <div className="grid grid-cols-2 gap-2 text-xs text-white font-medium w-full max-w-[150px]">
+                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Cal</span>{post.calories}</div>
+                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Pro</span>{post.protein}g</div>
+                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Carb</span>{post.carbs}g</div>
+                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Fat</span>{post.fat}g</div>
+                  </div>
+                )}
               </div>
               <div className={clsx(
                 "absolute top-3 right-3 w-3 h-3 rounded-full border border-black/20 shadow-sm",

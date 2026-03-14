@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon } from 'lucide-react';
+import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon, Trophy, Utensils } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function DashboardLayout() {
@@ -13,9 +13,11 @@ export default function DashboardLayout() {
     { name: 'Home Feed', path: '/dashboard', icon: Home },
     { name: 'Explore', path: '/dashboard/explore', icon: Compass },
     { name: 'Upload Food', path: '/dashboard/upload', icon: PlusSquare },
+    { name: 'Meal Recommendations', path: '/dashboard/recommendations', icon: Utensils, isComingSoon: true },
     { name: 'Messages', path: '/dashboard/messages', icon: MessageSquare },
     { name: 'Saved Posts', path: '/dashboard/saved', icon: Bookmark },
     { name: 'Profile', path: '/dashboard/profile', icon: User },
+    { name: 'Rewards & TGE', path: '/dashboard/rewards', icon: Trophy, isHighlighted: true },
     { name: 'Health Score', path: '/dashboard/health', icon: Activity },
     { name: 'Health Assistant', path: '/dashboard/ai-assistant', icon: Activity },
     { name: 'Subscription', path: '/dashboard/subscription', icon: CreditCard },
@@ -39,6 +41,22 @@ export default function DashboardLayout() {
         <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
+            
+            if (item.isComingSoon) {
+              return (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between px-4 py-3 rounded-2xl text-zinc-400 dark:text-zinc-600 cursor-not-allowed opacity-80"
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="w-5 h-5" strokeWidth={2} />
+                    {item.name}
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-zinc-200 dark:bg-white/10 rounded-full">Soon</span>
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.name}
@@ -47,11 +65,19 @@ export default function DashboardLayout() {
                   'flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300',
                   isActive 
                     ? 'bg-orange-600 text-white font-medium shadow-md shadow-orange-900/20' 
-                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-white/5'
+                    : item.isHighlighted
+                      ? 'bg-orange-500/10 border border-orange-500/30 text-orange-600 dark:text-orange-400 font-semibold hover:bg-orange-500/20 shadow-[0_0_15px_rgba(249,115,22,0.15)]'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-white/5'
                 )}
               >
-                <item.icon className={clsx("w-5 h-5", isActive ? "text-white" : "text-zinc-500")} strokeWidth={isActive ? 2.5 : 2} />
+                <item.icon className={clsx("w-5 h-5", isActive ? "text-white" : item.isHighlighted ? "text-orange-500 animate-pulse" : "text-zinc-500")} strokeWidth={isActive || item.isHighlighted ? 2.5 : 2} />
                 {item.name}
+                {item.isHighlighted && !isActive && (
+                  <span className="ml-auto flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                  </span>
+                )}
               </Link>
             );
           })}
