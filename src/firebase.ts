@@ -10,9 +10,11 @@ export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = async () => {
   try {
+    console.log("Attempting login with API Key:", firebaseConfig.apiKey);
     await signInWithPopup(auth, googleProvider);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login failed", error);
+    alert(`Login failed: ${error.message}`);
   }
 };
 
