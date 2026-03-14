@@ -1,11 +1,13 @@
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { Camera, Activity, Globe, Heart, ArrowRight, Smartphone, Apple, Zap, Brain, Sparkles } from 'lucide-react';
+import { Camera, Activity, Globe, Heart, ArrowRight, Smartphone, Apple, Zap, Brain, Sparkles, Utensils, Leaf } from 'lucide-react';
 import clsx from 'clsx';
+import { useState } from 'react';
 
 export default function Landing() {
   const { user, login } = useAuth();
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   if (user) {
     return <Navigate to="/dashboard" replace />;
@@ -29,8 +31,51 @@ export default function Landing() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-40 pb-24 px-6 max-w-7xl mx-auto text-center">
+      <section className="relative pt-40 pb-24 px-6 max-w-7xl mx-auto text-center overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          <motion.div 
+            animate={{ y: [0, -20, 0], rotate: [0, 10, 0] }} 
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-20 left-[10%] bg-white dark:bg-zinc-800 p-4 rounded-3xl shadow-xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
+          >
+            <div className="w-10 h-10 bg-orange-100 dark:bg-orange-500/20 rounded-full flex items-center justify-center">
+              <Utensils className="w-5 h-5 text-orange-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold">Avocado Toast</p>
+              <p className="text-xs text-zinc-500">Healthy Fat</p>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            animate={{ y: [0, 20, 0], rotate: [0, -10, 0] }} 
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            className="absolute top-40 right-[10%] bg-white dark:bg-zinc-800 p-4 rounded-3xl shadow-xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
+          >
+            <div className="text-left">
+              <p className="text-sm font-bold">Health Score</p>
+              <p className="text-xs text-emerald-500 font-medium">Excellent</p>
+            </div>
+            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-500/20 rounded-full flex items-center justify-center">
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">98</span>
+            </div>
+          </motion.div>
+
+          <motion.div 
+            animate={{ y: [0, -15, 0], scale: [1, 1.05, 1] }} 
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+            className="absolute bottom-20 left-[20%] bg-white dark:bg-zinc-800 p-3 rounded-full shadow-xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-2"
+          >
+            <div className="w-8 h-8 bg-purple-100 dark:bg-purple-500/20 rounded-full flex items-center justify-center">
+              <Leaf className="w-4 h-4 text-purple-500" />
+            </div>
+            <span className="text-sm font-bold pr-2">Vegan Vibe</span>
+          </motion.div>
+        </div>
+
         <motion.div
+          className="relative z-10"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
@@ -157,12 +202,36 @@ export default function Landing() {
 
       {/* Pricing */}
       <section className="py-32 px-6 max-w-7xl mx-auto">
-        <h2 className="text-4xl md:text-5xl font-bold text-center mb-20 tracking-tight">Choose Your Plan</h2>
+        <h2 className="text-4xl md:text-5xl font-bold text-center mb-6 tracking-tight">Choose Your Plan</h2>
+        
+        <div className="flex justify-center mb-16">
+          <div className="flex items-center bg-zinc-200 dark:bg-white/5 p-1 rounded-full border border-zinc-300 dark:border-white/10 w-fit">
+            <button 
+              onClick={() => setBillingCycle('monthly')}
+              className={clsx(
+                "px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300",
+                billingCycle === 'monthly' ? "bg-white dark:bg-[#1c1c1e] text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+              )}
+            >
+              Monthly
+            </button>
+            <button 
+              onClick={() => setBillingCycle('yearly')}
+              className={clsx(
+                "px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300",
+                billingCycle === 'yearly' ? "bg-white dark:bg-[#1c1c1e] text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+              )}
+            >
+              Yearly <span className="text-[10px] text-orange-500 uppercase tracking-wider ml-1">Save 20%</span>
+            </button>
+          </div>
+        </div>
+
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {[
-            { name: 'Free', price: '$0', features: ['Upload food photos', 'Browse feed', 'Like & comment', 'Save posts'] },
-            { name: 'Premium', price: '$49', features: ['Profile customization', 'Premium glowing badge', 'Direct DM inbox', 'Basic health score'], popular: true },
-            { name: 'Pro', price: '$99', features: ['Health assistant', 'Weekly health reports', 'Advanced health insights', 'Personalized diet recommendations'] },
+            { name: 'Free', priceMonthly: '$0', priceYearly: '$0', features: ['Upload food photos', 'Browse feed', 'Like & comment', 'Save posts'] },
+            { name: 'Premium', priceMonthly: '$49', priceYearly: '$499', features: ['Profile customization', 'Premium glowing badge', 'Direct DM inbox', 'Basic health score'], popular: true },
+            { name: 'Pro', priceMonthly: '$99', priceYearly: '$799', features: ['Health assistant', 'Weekly health reports', 'Advanced health insights', 'Personalized diet recommendations'] },
           ].map((plan, i) => (
             <div key={i} className={clsx(
               "p-10 rounded-[2.5rem] border flex flex-col transition-transform duration-300 hover:scale-[1.02]",
@@ -170,7 +239,10 @@ export default function Landing() {
             )}>
               {plan.popular && <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-lg shadow-orange-500/20">Most Popular</span>}
               <h3 className="text-2xl font-semibold mb-2 tracking-tight">{plan.name}</h3>
-              <div className="text-5xl font-bold mb-8 tracking-tighter">{plan.price}<span className="text-xl text-zinc-500 font-medium tracking-normal">/mo</span></div>
+              <div className="text-5xl font-bold mb-8 tracking-tighter">
+                {billingCycle === 'monthly' ? plan.priceMonthly : plan.priceYearly}
+                <span className="text-xl text-zinc-500 font-medium tracking-normal">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+              </div>
               <ul className="space-y-5 mb-10 flex-1">
                 {plan.features.map((f, j) => (
                   <li key={j} className="flex items-center gap-4 text-zinc-600 dark:text-zinc-300">

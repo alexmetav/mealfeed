@@ -58,13 +58,25 @@ export default function Upload() {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
+        
+        if (ctx) {
+          // Fill with white background to prevent transparent PNG/WebP from turning black
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
         
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         setImage(dataUrl);
         setMimeType('image/jpeg');
       };
+      img.onerror = () => {
+        alert("Failed to load image. The file might be corrupted or unsupported.");
+      };
       img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      alert("Failed to read the file.");
     };
     reader.readAsDataURL(file);
   };
@@ -90,7 +102,7 @@ export default function Upload() {
                 },
               },
               {
-                text: "Analyze this food image. Provide the food type, category, health rating (High, Medium, Low), a health score out of 100, health tips, and estimated nutritional values (calories, protein, carbs, fat in grams).",
+                text: "Analyze this food image. Provide the food type, category, health rating (High, Medium, Low), a health score out of 100, health tips, and estimated nutritional values (calories, protein, carbs, fat in grams). If you cannot clearly identify the food, provide your best guess or generic values.",
               },
             ],
           },
@@ -116,16 +128,22 @@ export default function Upload() {
 
         const resultText = response.text;
         if (resultText) {
-          const parsedResult = JSON.parse(resultText) as FoodAnalysisResult;
-          setAnalysis(parsedResult);
-          break; // Success, exit loop
+          try {
+            const cleanedText = resultText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsedResult = JSON.parse(cleanedText) as FoodAnalysisResult;
+            setAnalysis(parsedResult);
+            break; // Success, exit loop
+          } catch (parseError) {
+            console.error("JSON Parse Error:", parseError, "Raw Text:", resultText);
+            throw new Error("Failed to parse AI response format");
+          }
         } else {
           throw new Error("Empty response from AI");
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Analysis failed (retries left: ${retries}):`, error);
         if (retries === 0) {
-          alert("Failed to analyze image. Please try again.");
+          alert(`Failed to analyze image: ${error?.message || 'Unknown error'}. Please try a different image.`);
         }
         retries--;
         if (retries >= 0) {
