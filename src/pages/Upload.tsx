@@ -73,56 +73,67 @@ export default function Upload() {
     if (!image) return;
     setLoading(true);
     
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const base64Data = image.split(',')[1];
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data,
+    let retries = 2;
+    while (retries >= 0) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const base64Data = image.split(',')[1];
+        
+        const response = await ai.models.generateContent({
+          model: "gemini-3.1-pro-preview",
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data,
+                },
               },
-            },
-            {
-              text: "Analyze this food image. Provide the food type, category, health rating (High, Medium, Low), a health score out of 100, health tips, and estimated nutritional values (calories, protein, carbs, fat in grams).",
-            },
-          ],
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              foodType: { type: Type.STRING, description: "Name of the food" },
-              category: { type: Type.STRING, description: "Category like Breakfast, Lunch, Snack, etc." },
-              healthRating: { type: Type.STRING, description: "Must be exactly 'High', 'Medium', or 'Low'" },
-              healthScore: { type: Type.INTEGER, description: "Score from 0 to 100" },
-              healthTips: { type: Type.STRING, description: "Short health tip" },
-              calories: { type: Type.INTEGER, description: "Estimated calories" },
-              protein: { type: Type.INTEGER, description: "Estimated protein in grams" },
-              carbs: { type: Type.INTEGER, description: "Estimated carbs in grams" },
-              fat: { type: Type.INTEGER, description: "Estimated fat in grams" },
-            },
-            required: ["foodType", "category", "healthRating", "healthScore", "healthTips", "calories", "protein", "carbs", "fat"],
+              {
+                text: "Analyze this food image. Provide the food type, category, health rating (High, Medium, Low), a health score out of 100, health tips, and estimated nutritional values (calories, protein, carbs, fat in grams).",
+              },
+            ],
           },
-        },
-      });
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                foodType: { type: Type.STRING, description: "Name of the food" },
+                category: { type: Type.STRING, description: "Category like Breakfast, Lunch, Snack, etc." },
+                healthRating: { type: Type.STRING, description: "Must be exactly 'High', 'Medium', or 'Low'" },
+                healthScore: { type: Type.INTEGER, description: "Score from 0 to 100" },
+                healthTips: { type: Type.STRING, description: "Short health tip" },
+                calories: { type: Type.INTEGER, description: "Estimated calories" },
+                protein: { type: Type.INTEGER, description: "Estimated protein in grams" },
+                carbs: { type: Type.INTEGER, description: "Estimated carbs in grams" },
+                fat: { type: Type.INTEGER, description: "Estimated fat in grams" },
+              },
+              required: ["foodType", "category", "healthRating", "healthScore", "healthTips", "calories", "protein", "carbs", "fat"],
+            },
+          },
+        });
 
-      const resultText = response.text;
-      if (resultText) {
-        const parsedResult = JSON.parse(resultText) as FoodAnalysisResult;
-        setAnalysis(parsedResult);
+        const resultText = response.text;
+        if (resultText) {
+          const parsedResult = JSON.parse(resultText) as FoodAnalysisResult;
+          setAnalysis(parsedResult);
+          break; // Success, exit loop
+        } else {
+          throw new Error("Empty response from AI");
+        }
+      } catch (error) {
+        console.error(`Analysis failed (retries left: ${retries}):`, error);
+        if (retries === 0) {
+          alert("Failed to analyze image. Please try again.");
+        }
+        retries--;
+        if (retries >= 0) {
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s before retry
+        }
       }
-    } catch (error) {
-      console.error("Analysis failed:", error);
-      alert("Failed to analyze image. Please try again.");
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const handlePost = async () => {
