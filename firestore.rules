@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "shahidmalikagra@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'username', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'lastActionDate']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             (!('profileImage' in data) || (data.profileImage is string && data.profileImage.size() < 1000000)) &&
+             data.subscriptionPlan in ['free', 'premium', 'pro'] &&
+             (!('healthScore' in data) || (data.healthScore is number && data.healthScore >= 0 && data.healthScore <= 100)) &&
+             data.role in ['user', 'admin'] &&
+             (!('walletAddress' in data) || (data.walletAddress is string && data.walletAddress.size() < 100)) &&
+             (!('subscriptionExpiresAt' in data) || data.subscriptionExpiresAt is string) &&
+             data.points is number &&
+             data.streak is number &&
+             (!('lastCheckIn' in data) || data.lastCheckIn is string) &&
+             (!('dailyLikesCount' in data) || data.dailyLikesCount is number) &&
+             (!('dailyCommentsCount' in data) || data.dailyCommentsCount is number) &&
+             (!('lastActionDate' in data) || data.lastActionDate is string) &&
+             data.createdAt is string; // ISO string
+    }
+
+    function isValidPost(data) {
+      return hasOnlyAllowedFields(['userId', 'authorName', 'authorImage', 'imageUrl', 'foodType', 'category', 'healthRating', 'healthScore', 'caption', 'likesCount', 'commentsCount', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 50 &&
+             (!('authorImage' in data) || (data.authorImage is string && data.authorImage.size() < 1000000)) &&
+             data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() < 1000000 &&
+             data.foodType is string && data.foodType.size() > 0 && data.foodType.size() < 100 &&
+             data.category is string && data.category.size() > 0 && data.category.size() < 100 &&
+             data.healthRating in ['Low', 'Medium', 'High'] &&
+             data.healthScore is number && data.healthScore >= 0 && data.healthScore <= 100 &&
+             (!('caption' in data) || (data.caption is string && data.caption.size() < 1000)) &&
+             data.likesCount is number && data.likesCount >= 0 &&
+             data.commentsCount is number && data.commentsCount >= 0 &&
+             data.createdAt is string;
+    }
+
+    function isValidLike(data) {
+      return hasOnlyAllowedFields(['userId', 'postId', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.postId is string && data.postId.size() > 0 && data.postId.size() < 100 &&
+             data.createdAt is string;
+    }
+
+    function isValidComment(data) {
+      return hasOnlyAllowedFields(['postId', 'userId', 'authorName', 'text', 'createdAt']) &&
+             data.postId is string && data.postId.size() > 0 && data.postId.size() < 100 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 50 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.createdAt is string;
+    }
+
+    function isValidFollow(data) {
+      return hasOnlyAllowedFields(['followerId', 'followerName', 'followerImage', 'followingId', 'followingName', 'followingImage', 'createdAt']) &&
+             data.followerId is string && data.followerId.size() > 0 && data.followerId.size() < 100 &&
+             data.followerName is string && data.followerName.size() > 0 && data.followerName.size() < 50 &&
+             (!('followerImage' in data) || (data.followerImage is string && data.followerImage.size() < 1000000)) &&
+             data.followingId is string && data.followingId.size() > 0 && data.followingId.size() < 100 &&
+             data.followingName is string && data.followingName.size() > 0 && data.followingName.size() < 50 &&
+             (!('followingImage' in data) || (data.followingImage is string && data.followingImage.size() < 1000000)) &&
+             data.createdAt is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId) && uidUnchanged() && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId) && uidNotModified() && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /posts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidPost(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidPost(request.resource.data) && 
+        ((request.resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId) || 
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'commentsCount'])));
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /likes/{likeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidLike(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidComment(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidComment(request.resource.data) && request.resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /follows/{followId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidFollow(request.resource.data) && request.resource.data.followerId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.followerId == request.auth.uid || isAdmin());
+    }
+  }
+}

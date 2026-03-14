@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the MealFeed platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user's unique ID." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "username": { "type": "string", "description": "The user's display name." },
+        "profileImage": { "type": "string", "description": "URL or base64 of the user's profile image." },
+        "subscriptionPlan": { "type": "string", "enum": ["free", "premium", "pro"], "description": "The user's subscription tier." },
+        "healthScore": { "type": "number", "description": "The user's overall health score (0-100)." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "The user's role." },
+        "walletAddress": { "type": "string", "description": "The user's connected Web3 wallet address." },
+        "subscriptionExpiresAt": { "type": "string", "format": "date-time", "description": "When the subscription expires." },
+        "points": { "type": "number", "description": "Total points earned by the user." },
+        "streak": { "type": "number", "description": "Current daily check-in streak." },
+        "lastCheckIn": { "type": "string", "format": "date-time", "description": "Timestamp of the last daily check-in." },
+        "dailyLikesCount": { "type": "number", "description": "Number of likes given today." },
+        "dailyCommentsCount": { "type": "number", "description": "Number of comments given today." },
+        "lastActionDate": { "type": "string", "description": "The date (YYYY-MM-DD) of the last recorded action to reset daily limits." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "username", "subscriptionPlan", "role", "createdAt", "points", "streak"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "A food post uploaded by a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user who created the post." },
+        "authorName": { "type": "string", "description": "The name of the author." },
+        "authorImage": { "type": "string", "description": "The profile image of the author." },
+        "imageUrl": { "type": "string", "description": "Base64 encoded image or URL of the food." },
+        "foodType": { "type": "string", "description": "The specific food detected (e.g., Pizza)." },
+        "category": { "type": "string", "description": "The category of the food (e.g., Fast Food)." },
+        "healthRating": { "type": "string", "enum": ["Low", "Medium", "High"], "description": "The health impact of the food." },
+        "healthScore": { "type": "number", "description": "Numeric health score of the meal (0-100)." },
+        "caption": { "type": "string", "description": "Optional caption provided by the user." },
+        "likesCount": { "type": "number", "description": "Number of likes on the post." },
+        "commentsCount": { "type": "number", "description": "Number of comments on the post." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "authorName", "imageUrl", "foodType", "category", "healthRating", "healthScore", "likesCount", "commentsCount", "createdAt"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "A like on a post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "postId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "postId", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A comment on a post.",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "userId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["postId", "userId", "authorName", "text", "createdAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "A follow relationship between two users.",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string" },
+        "followerName": { "type": "string" },
+        "followerImage": { "type": "string" },
+        "followingId": { "type": "string" },
+        "followingName": { "type": "string" },
+        "followingImage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["followerId", "followerName", "followingId", "followingName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Stores food posts."
+    },
+    "/likes/{likeId}": {
+      "schema": { "$ref": "#/entities/Like" },
+      "description": "Stores post likes."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Stores post comments."
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/Follow" },
+      "description": "Stores user follow relationships."
+    }
+  }
+}
