@@ -93,12 +93,12 @@ export default function Recommendations() {
           {/* Goal */}
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
-              <Target className="w-4 h-4 text-orange-500" /> Your Goal
+              <Target className="w-4 h-4 text-yellow-500" /> Your Goal
             </label>
             <select 
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50"
             >
               <option value="Weight Loss">Weight Loss</option>
               <option value="Weight Gain">Weight Gain</option>
@@ -143,7 +143,7 @@ export default function Recommendations() {
         <button 
           onClick={handleGenerate}
           disabled={loading || !cuisine.trim()}
-          className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-900/20"
+          className="w-full flex items-center justify-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-yellow-900/20"
         >
           {loading ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Generating Meals...</>
@@ -157,7 +157,7 @@ export default function Recommendations() {
       {recommendations.length > 0 && (
         <div className="space-y-6">
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
-            <Flame className="w-5 h-5 text-orange-500" /> Suggested Meals
+            <Flame className="w-5 h-5 text-yellow-500" /> Suggested Meals
           </h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -195,7 +195,7 @@ export default function Recommendations() {
                     <ul className="space-y-2">
                       {rec.groceryList.map((item, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-                          <ChevronRight className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                          <ChevronRight className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
                           <span>{item}</span>
                         </li>
                       ))}

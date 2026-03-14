@@ -14,7 +14,7 @@ export default function Messages() {
         <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto text-lg leading-relaxed">
           Direct messaging is a Premium feature. Upgrade your account to connect directly with other foodies!
         </p>
-        <button className="px-10 py-4 bg-orange-600 text-white font-semibold rounded-full hover:bg-orange-500 transition-all duration-300 shadow-lg shadow-orange-900/30 text-lg">
+        <button className="px-10 py-4 bg-yellow-600 text-white font-semibold rounded-full hover:bg-yellow-500 transition-all duration-300 shadow-lg shadow-yellow-900/30 text-lg">
           Upgrade to Premium
         </button>
       </div>
@@ -33,7 +33,7 @@ export default function Messages() {
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
           <div className="p-4 rounded-2xl hover:bg-zinc-100 dark:bg-white/5 cursor-pointer flex items-center gap-4 transition-colors group">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500/20 to-purple-500/20 border border-zinc-200 dark:border-white/10 flex-shrink-0" />
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-500/20 to-purple-500/20 border border-zinc-200 dark:border-white/10 flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <p className="font-semibold text-zinc-900 dark:text-white truncate">Alex Chef</p>

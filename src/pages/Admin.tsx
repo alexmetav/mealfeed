@@ -60,7 +60,7 @@ export default function Admin() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         {[
-          { label: 'Total Users', value: stats.users, icon: Users, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+          { label: 'Total Users', value: stats.users, icon: Users, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
           { label: 'Total Posts', value: stats.posts, icon: ImageIcon, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
           { label: 'Monthly Revenue', value: `$${stats.revenue}`, icon: CreditCard, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
           { label: 'Reports', value: 0, icon: ShieldAlert, color: 'text-red-500', bg: 'bg-red-500/10' },

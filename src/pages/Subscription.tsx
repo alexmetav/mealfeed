@@ -178,14 +178,14 @@ export default function Subscription() {
     <div className="max-w-5xl mx-auto pb-24 relative font-sans">
       {successAnimation && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500">
-          <div className="bg-white dark:bg-[#1c1c1e] p-10 rounded-[3rem] flex flex-col items-center justify-center text-center shadow-2xl shadow-orange-500/20 transform animate-in zoom-in-95 duration-500">
+          <div className="bg-white dark:bg-[#1c1c1e] p-10 rounded-[3rem] flex flex-col items-center justify-center text-center shadow-2xl shadow-yellow-500/20 transform animate-in zoom-in-95 duration-500">
             <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6 relative">
               <div className="absolute inset-0 bg-emerald-500/20 rounded-full animate-ping" />
               <CheckCircle2 className="w-12 h-12 text-emerald-500" />
             </div>
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2 tracking-tight">You are Subscribed!</h2>
             <p className="text-zinc-500 dark:text-zinc-400 text-lg mb-6">Welcome to the {selectedPlan} plan.</p>
-            <div className="flex items-center gap-2 text-orange-500 font-medium bg-orange-500/10 px-6 py-3 rounded-full border border-orange-500/20">
+            <div className="flex items-center gap-2 text-yellow-500 font-medium bg-yellow-500/10 px-6 py-3 rounded-full border border-yellow-500/20">
               <Sparkles className="w-5 h-5" />
               Enjoy your premium features
             </div>
@@ -216,15 +216,15 @@ export default function Subscription() {
               billingCycle === 'yearly' ? "bg-white dark:bg-[#1c1c1e] text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
             )}
           >
-            Yearly <span className="text-[10px] text-orange-500 uppercase tracking-wider ml-1">Save 20%</span>
+            Yearly <span className="text-[10px] text-yellow-500 uppercase tracking-wider ml-1">Save 20%</span>
           </button>
         </div>
       </div>
 
       {isSubscriptionActive && profile.subscriptionPlan !== 'free' && (
-        <div className="mb-10 p-5 bg-orange-500/10 border border-orange-500/20 rounded-3xl text-orange-400 flex items-center gap-4 shadow-lg shadow-orange-500/5 backdrop-blur-md">
-          <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-            <Wallet className="w-5 h-5 text-orange-400" />
+        <div className="mb-10 p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-3xl text-yellow-400 flex items-center gap-4 shadow-lg shadow-yellow-500/5 backdrop-blur-md">
+          <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+            <Wallet className="w-5 h-5 text-yellow-400" />
           </div>
           <div>
             <p className="font-semibold text-zinc-900 dark:text-white">Active Subscription via Web3</p>
@@ -244,11 +244,11 @@ export default function Subscription() {
         ].map((plan) => (
           <div key={plan.id} className={clsx(
             "p-8 rounded-[2rem] border flex flex-col relative transition-all duration-300 hover:scale-[1.02]",
-            plan.popular ? "bg-white dark:bg-[#1c1c1e] border-orange-500/50 shadow-2xl shadow-orange-900/20" : "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 backdrop-blur-xl",
-            profile?.subscriptionPlan === plan.id && isSubscriptionActive && "ring-2 ring-orange-500"
+            plan.popular ? "bg-white dark:bg-[#1c1c1e] border-yellow-500/50 shadow-2xl shadow-yellow-900/20" : "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 backdrop-blur-xl",
+            profile?.subscriptionPlan === plan.id && isSubscriptionActive && "ring-2 ring-yellow-500"
           )}>
             {profile?.subscriptionPlan === plan.id && isSubscriptionActive && (
-              <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-orange-500/20">
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-yellow-500 text-white text-xs font-bold rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-yellow-500/20">
                 <CheckCircle2 className="w-4 h-4" /> Current Plan
               </span>
             )}
@@ -260,7 +260,7 @@ export default function Subscription() {
             <ul className="space-y-4 mb-10 flex-1">
               {plan.features.map((f, j) => (
                 <li key={j} className="flex items-center gap-3 text-zinc-600 dark:text-zinc-300">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]" />
                   <span className="text-sm font-medium">{f}</span>
                 </li>
               ))}
@@ -270,7 +270,7 @@ export default function Subscription() {
               disabled={loading || (profile?.subscriptionPlan === plan.id && isSubscriptionActive)}
               className={clsx(
                 "w-full py-4 rounded-2xl font-semibold transition-all duration-300 disabled:opacity-50",
-                plan.popular ? "bg-orange-600 text-white hover:bg-orange-500 shadow-lg shadow-orange-900/30" : "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-white/20"
+                plan.popular ? "bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/30" : "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-white/20"
               )}
             >
               {loading && profile?.subscriptionPlan !== plan.id ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (profile?.subscriptionPlan === plan.id && isSubscriptionActive) ? 'Current Plan' : 'Select Plan'}
@@ -292,14 +292,14 @@ export default function Subscription() {
             
             <h2 className="text-2xl font-semibold mb-2 tracking-tight">Connect Wallet</h2>
             <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-8">
-              Connect your Web3 wallet to pay for the <span className="text-orange-400 font-medium capitalize">{selectedPlan}</span> plan on BNB Smart Chain.
+              Connect your Web3 wallet to pay for the <span className="text-yellow-400 font-medium capitalize">{selectedPlan}</span> plan on BNB Smart Chain.
             </p>
 
             <div className="space-y-3">
               <button 
                 onClick={connectMetaMask}
                 disabled={loading}
-                className="w-full flex items-center justify-between p-4 rounded-2xl bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 hover:border-orange-500/50 hover:bg-zinc-200 dark:hover:bg-white/10 transition-all duration-300 disabled:opacity-50 group"
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 hover:border-yellow-500/50 hover:bg-zinc-200 dark:hover:bg-white/10 transition-all duration-300 disabled:opacity-50 group"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">

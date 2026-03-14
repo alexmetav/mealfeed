@@ -244,14 +244,14 @@ export default function Feed() {
                     {post.userId !== user?.uid && (
                       <button 
                         onClick={() => handleFollow(post.userId, post.authorName, post.authorImage)}
-                        className={clsx("text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors uppercase tracking-wider", following.has(post.userId) ? "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white" : "bg-orange-500 text-white")}
+                        className={clsx("text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors uppercase tracking-wider", following.has(post.userId) ? "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white" : "bg-yellow-500 text-white")}
                       >
                         {following.has(post.userId) ? 'Following' : 'Follow'}
                       </button>
                     )}
                     {/* Premium Badge Mock */}
                     {post.healthScore > 80 && (
-                      <span className="text-[10px] px-2 py-0.5 bg-orange-500 text-white font-bold rounded-full uppercase tracking-wider shadow-sm shadow-orange-500/20">Pro</span>
+                      <span className="text-[10px] px-2 py-0.5 bg-yellow-500 text-white font-bold rounded-full uppercase tracking-wider shadow-sm shadow-yellow-500/20">Pro</span>
                     )}
                   </div>
                   <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
@@ -313,9 +313,9 @@ export default function Feed() {
                 <div className="flex items-center gap-5">
                   <button 
                     onClick={() => handleLike(post.id, post.userId)}
-                    className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 hover:text-orange-500 transition-colors group"
+                    className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 hover:text-yellow-500 transition-colors group"
                   >
-                    <Heart className={clsx("w-7 h-7 transition-transform group-hover:scale-110", likedPosts.has(post.id) && "fill-orange-500 text-orange-500")} />
+                    <Heart className={clsx("w-7 h-7 transition-transform group-hover:scale-110", likedPosts.has(post.id) && "fill-yellow-500 text-yellow-500")} />
                   </button>
                   <button 
                     onClick={() => setActiveCommentPost(activeCommentPost === post.id ? null : post.id)}
@@ -336,11 +336,11 @@ export default function Feed() {
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
                     placeholder="Add a comment..."
-                    className="flex-1 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-orange-500"
+                    className="flex-1 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
                   />
                   <button 
                     onClick={() => handleComment(post.id, post.userId)}
-                    className="px-4 py-2 bg-orange-600 text-white text-xs font-bold rounded-xl hover:bg-orange-500 transition-colors"
+                    className="px-4 py-2 bg-yellow-600 text-white text-xs font-bold rounded-xl hover:bg-yellow-500 transition-colors"
                   >
                     Post
                   </button>

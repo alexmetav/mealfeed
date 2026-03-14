@@ -60,7 +60,7 @@ export default function Health() {
     <div className="max-w-4xl mx-auto pb-24 space-y-10 font-sans">
       <div className="flex items-center justify-between mb-10">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">Health Dashboard</h1>
-        <div className="px-5 py-2.5 bg-orange-500/10 text-orange-400 rounded-full font-bold flex items-center gap-2 border border-orange-500/20 shadow-sm shadow-orange-500/10">
+        <div className="px-5 py-2.5 bg-yellow-500/10 text-yellow-400 rounded-full font-bold flex items-center gap-2 border border-yellow-500/20 shadow-sm shadow-yellow-500/10">
           <Activity className="w-5 h-5" /> Score: {profile?.healthScore}/100
         </div>
       </div>
@@ -68,7 +68,7 @@ export default function Health() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         {[
-          { label: 'Total Meals Tracked', value: totalMeals, icon: Award, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+          { label: 'Total Meals Tracked', value: totalMeals, icon: Award, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
           { label: 'Healthy Choices', value: healthyMeals, icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
           { label: 'Moderate Choices', value: mediumMeals, icon: Activity, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
           { label: 'Unhealthy Choices', value: lowMeals, icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-500/10' },

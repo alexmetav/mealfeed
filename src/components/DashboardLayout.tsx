@@ -29,12 +29,12 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-50 flex font-sans selection:bg-orange-500/30">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-50 flex font-sans selection:bg-yellow-500/30">
       {/* Sidebar */}
       <aside className="w-64 border-r border-zinc-200 dark:border-white/10 flex flex-col hidden md:flex fixed h-full bg-zinc-50 dark:bg-black/50 backdrop-blur-xl z-20">
         <div className="p-8">
           <Link to="/dashboard" className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">
-            MealFeed<span className="text-orange-500">.</span>
+            MealFeed<span className="text-yellow-500">.</span>
           </Link>
         </div>
 
@@ -64,18 +64,18 @@ export default function DashboardLayout() {
                 className={clsx(
                   'flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300',
                   isActive 
-                    ? 'bg-orange-600 text-white font-medium shadow-md shadow-orange-900/20' 
+                    ? 'bg-yellow-600 text-white font-medium shadow-md shadow-yellow-900/20' 
                     : item.isHighlighted
-                      ? 'bg-orange-500/10 border border-orange-500/30 text-orange-600 dark:text-orange-400 font-semibold hover:bg-orange-500/20 shadow-[0_0_15px_rgba(249,115,22,0.15)]'
+                      ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 dark:text-yellow-400 font-semibold hover:bg-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.15)]'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-white/5'
                 )}
               >
-                <item.icon className={clsx("w-5 h-5", isActive ? "text-white" : item.isHighlighted ? "text-orange-500 animate-pulse" : "text-zinc-500")} strokeWidth={isActive || item.isHighlighted ? 2.5 : 2} />
+                <item.icon className={clsx("w-5 h-5", isActive ? "text-white" : item.isHighlighted ? "text-yellow-500 animate-pulse" : "text-zinc-500")} strokeWidth={isActive || item.isHighlighted ? 2.5 : 2} />
                 {item.name}
                 {item.isHighlighted && !isActive && (
                   <span className="ml-auto flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
                   </span>
                 )}
               </Link>
@@ -103,21 +103,21 @@ export default function DashboardLayout() {
               <input 
                 type="text" 
                 placeholder="Search foods, users..." 
-                className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-full px-5 py-2.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all"
+                className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-full px-5 py-2.5 text-sm text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-transparent transition-all"
               />
             </div>
           </div>
           <div className="flex items-center gap-5 ml-4">
             <button 
               onClick={toggleTheme}
-              className="p-2 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:text-orange-500 transition-colors"
+              className="p-2 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:text-yellow-500 transition-colors"
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium text-zinc-900 dark:text-white">{profile?.username}</p>
-                <p className="text-xs text-orange-400 font-medium capitalize">{profile?.subscriptionPlan} Plan</p>
+                <p className="text-xs text-yellow-400 font-medium capitalize">{profile?.subscriptionPlan} Plan</p>
               </div>
               <img 
                 src={profile?.profileImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.uid}`} 

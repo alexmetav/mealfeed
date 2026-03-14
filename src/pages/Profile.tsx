@@ -96,7 +96,7 @@ export default function Profile() {
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center md:items-start gap-10 mb-16">
         <div className="relative">
-          <div className="w-32 h-32 md:w-40 md:h-40 rounded-full p-1 bg-gradient-to-br from-orange-500/30 to-purple-500/30">
+          <div className="w-32 h-32 md:w-40 md:h-40 rounded-full p-1 bg-gradient-to-br from-yellow-500/30 to-purple-500/30">
             <img 
               src={profile.profileImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} 
               alt={profile.username}
@@ -104,7 +104,7 @@ export default function Profile() {
             />
           </div>
           {profile.subscriptionPlan !== 'free' && (
-            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-orange-500 text-white text-[10px] font-bold rounded-full uppercase tracking-widest shadow-lg shadow-orange-500/20 border border-orange-400/50">
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-yellow-500 text-white text-[10px] font-bold rounded-full uppercase tracking-widest shadow-lg shadow-yellow-500/20 border border-yellow-400/50">
               {profile.subscriptionPlan}
             </div>
           )}
@@ -126,7 +126,7 @@ export default function Profile() {
                   "flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all duration-300 shadow-lg",
                   (profile.checkInHistory?.includes(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`) || profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0])
                     ? "bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 cursor-default"
-                    : "bg-orange-600 text-white hover:bg-orange-500 shadow-orange-900/20"
+                    : "bg-yellow-600 text-white hover:bg-yellow-500 shadow-yellow-900/20"
                 )}
               >
                 <CalendarCheck className="w-4 h-4" />
@@ -147,7 +147,7 @@ export default function Profile() {
               </div>
             </div>
             <div className="flex items-center gap-2 bg-zinc-100 dark:bg-white/5 px-4 py-2 rounded-2xl border border-zinc-200 dark:border-white/10">
-              <Flame className="w-5 h-5 text-orange-500" />
+              <Flame className="w-5 h-5 text-yellow-500" />
               <div>
                 <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Streak</p>
                 <p className="font-bold text-zinc-900 dark:text-white">{profile.streak || 0} Days</p>
@@ -157,13 +157,13 @@ export default function Profile() {
 
           <div className="flex items-center justify-center md:justify-start gap-8 mb-6">
             <div className="text-center md:text-left group cursor-pointer">
-              <span className="font-semibold text-xl text-zinc-900 dark:text-white group-hover:text-orange-400 transition-colors">{posts.length}</span> <span className="text-zinc-500 dark:text-zinc-400 text-sm">posts</span>
+              <span className="font-semibold text-xl text-zinc-900 dark:text-white group-hover:text-yellow-400 transition-colors">{posts.length}</span> <span className="text-zinc-500 dark:text-zinc-400 text-sm">posts</span>
             </div>
             <div className="text-center md:text-left group cursor-pointer" onClick={() => setShowFollowersModal(true)}>
-              <span className="font-semibold text-xl text-zinc-900 dark:text-white group-hover:text-orange-400 transition-colors">{followers.length}</span> <span className="text-zinc-500 dark:text-zinc-400 text-sm">followers</span>
+              <span className="font-semibold text-xl text-zinc-900 dark:text-white group-hover:text-yellow-400 transition-colors">{followers.length}</span> <span className="text-zinc-500 dark:text-zinc-400 text-sm">followers</span>
             </div>
             <div className="text-center md:text-left group cursor-pointer" onClick={() => setShowFollowingModal(true)}>
-              <span className="font-semibold text-xl text-zinc-900 dark:text-white group-hover:text-orange-400 transition-colors">{following.length}</span> <span className="text-zinc-500 dark:text-zinc-400 text-sm">following</span>
+              <span className="font-semibold text-xl text-zinc-900 dark:text-white group-hover:text-yellow-400 transition-colors">{following.length}</span> <span className="text-zinc-500 dark:text-zinc-400 text-sm">following</span>
             </div>
           </div>
 

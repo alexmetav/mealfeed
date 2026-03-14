@@ -14,11 +14,11 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-50 font-sans selection:bg-orange-500/30">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-50 font-sans selection:bg-yellow-500/30">
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 bg-zinc-50 dark:bg-black/50 backdrop-blur-2xl border-b border-zinc-200 dark:border-white/10">
         <div className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-          <div className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">MealFeed<span className="text-orange-500">.</span></div>
+          <div className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">MealFeed<span className="text-yellow-500">.</span></div>
           <div className="flex gap-4">
             <button onClick={login} className="px-5 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:text-white transition-colors">
               Log In
@@ -40,8 +40,8 @@ export default function Landing() {
               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
               className="absolute top-20 md:top-32 left-[-20px] md:left-8 lg:left-12 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-md p-4 rounded-3xl shadow-2xl border border-zinc-200 dark:border-white/10 hidden md:flex items-center gap-3"
             >
-              <div className="w-10 h-10 bg-orange-100 dark:bg-orange-500/20 rounded-full flex items-center justify-center">
-                <Utensils className="w-5 h-5 text-orange-500" />
+              <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-500/20 rounded-full flex items-center justify-center">
+                <Utensils className="w-5 h-5 text-yellow-500" />
               </div>
               <div className="text-left">
                 <p className="text-sm font-bold text-zinc-900 dark:text-white">Avocado Toast</p>
@@ -100,7 +100,7 @@ export default function Landing() {
             Share your meals, discover global food trends, and receive health insights instantly.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button onClick={login} className="flex items-center justify-center gap-2 px-8 py-4 bg-orange-600 text-white rounded-full font-semibold hover:bg-orange-500 transition-all shadow-lg shadow-orange-900/20 w-full sm:w-auto text-lg">
+            <button onClick={login} className="flex items-center justify-center gap-2 px-8 py-4 bg-yellow-600 text-white rounded-full font-semibold hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-900/20 w-full sm:w-auto text-lg">
               Join Now <ArrowRight className="w-5 h-5" />
             </button>
             <button className="px-8 py-4 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-full font-semibold hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors w-full sm:w-auto text-lg backdrop-blur-md">
@@ -129,7 +129,7 @@ export default function Landing() {
                 transition={{ delay: i * 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                 className="p-8 rounded-[2rem] bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors backdrop-blur-xl"
               >
-                <div className="w-14 h-14 bg-orange-500/20 text-orange-400 rounded-2xl flex items-center justify-center mb-8 shadow-inner shadow-orange-500/20">
+                <div className="w-14 h-14 bg-yellow-500/20 text-yellow-400 rounded-2xl flex items-center justify-center mb-8 shadow-inner shadow-yellow-500/20">
                   <item.icon className="w-7 h-7" />
                 </div>
                 <h3 className="text-xl font-semibold mb-3 tracking-tight">Step {item.step}: {item.title}</h3>
@@ -149,7 +149,7 @@ export default function Landing() {
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500/10 text-orange-500 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 text-yellow-500 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
               <Zap className="w-4 h-4" /> Powered by Advanced AI
             </div>
             <h2 className="text-4xl md:text-6xl font-bold tracking-tighter mb-8 leading-tight">
@@ -163,7 +163,7 @@ export default function Landing() {
             <div className="space-y-8">
               <div className="flex gap-6">
                 <div className="w-12 h-12 shrink-0 bg-zinc-100 dark:bg-white/5 rounded-2xl flex items-center justify-center border border-zinc-200 dark:border-white/10">
-                  <Activity className="w-6 h-6 text-orange-500" />
+                  <Activity className="w-6 h-6 text-yellow-500" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2 tracking-tight">Dynamic Health Score</h3>
@@ -172,7 +172,7 @@ export default function Landing() {
               </div>
               <div className="flex gap-6">
                 <div className="w-12 h-12 shrink-0 bg-zinc-100 dark:bg-white/5 rounded-2xl flex items-center justify-center border border-zinc-200 dark:border-white/10">
-                  <Sparkles className="w-6 h-6 text-orange-500" />
+                  <Sparkles className="w-6 h-6 text-yellow-500" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2 tracking-tight">AI Health Assistant</h3>
@@ -189,7 +189,7 @@ export default function Landing() {
             transition={{ duration: 0.8 }}
             className="relative"
           >
-            <div className="aspect-square bg-gradient-to-br from-orange-500/20 to-purple-500/20 rounded-[3rem] p-8 border border-orange-500/20 shadow-2xl overflow-hidden group">
+            <div className="aspect-square bg-gradient-to-br from-yellow-500/20 to-purple-500/20 rounded-[3rem] p-8 border border-yellow-500/20 shadow-2xl overflow-hidden group">
               <div className="absolute inset-0 bg-[url('https://picsum.photos/seed/nutrition/800/800')] bg-cover bg-center opacity-40 group-hover:scale-110 transition-transform duration-700" />
               <div className="relative z-10 h-full flex flex-col justify-end">
                 <div className="bg-white/10 backdrop-blur-2xl p-6 rounded-3xl border border-white/20 shadow-2xl">
@@ -207,7 +207,7 @@ export default function Landing() {
               </div>
             </div>
             {/* Decorative elements */}
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-500/30 blur-[60px] rounded-full" />
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-500/30 blur-[60px] rounded-full" />
             <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-500/30 blur-[60px] rounded-full" />
           </motion.div>
         </div>
@@ -235,7 +235,7 @@ export default function Landing() {
                 billingCycle === 'yearly' ? "bg-white dark:bg-[#1c1c1e] text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
               )}
             >
-              Yearly <span className="text-[10px] text-orange-500 uppercase tracking-wider ml-1">Save 20%</span>
+              Yearly <span className="text-[10px] text-yellow-500 uppercase tracking-wider ml-1">Save 20%</span>
             </button>
           </div>
         </div>
@@ -248,9 +248,9 @@ export default function Landing() {
           ].map((plan, i) => (
             <div key={i} className={clsx(
               "p-10 rounded-[2.5rem] border flex flex-col transition-transform duration-300 hover:scale-[1.02]",
-              plan.popular ? "bg-white dark:bg-[#1c1c1e] border-orange-500/50 shadow-2xl shadow-orange-900/20 relative" : "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 backdrop-blur-xl"
+              plan.popular ? "bg-white dark:bg-[#1c1c1e] border-yellow-500/50 shadow-2xl shadow-yellow-900/20 relative" : "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 backdrop-blur-xl"
             )}>
-              {plan.popular && <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-lg shadow-orange-500/20">Most Popular</span>}
+              {plan.popular && <span className="absolute -top-4 left-1/2 -translate-x-1/2 px-5 py-1.5 bg-yellow-500 text-white text-xs font-bold rounded-full uppercase tracking-wider shadow-lg shadow-yellow-500/20">Most Popular</span>}
               <h3 className="text-2xl font-semibold mb-2 tracking-tight">{plan.name}</h3>
               <div className="text-5xl font-bold mb-8 tracking-tighter">
                 {billingCycle === 'monthly' ? plan.priceMonthly : plan.priceYearly}
@@ -259,14 +259,14 @@ export default function Landing() {
               <ul className="space-y-5 mb-10 flex-1">
                 {plan.features.map((f, j) => (
                   <li key={j} className="flex items-center gap-4 text-zinc-600 dark:text-zinc-300">
-                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)]" />
                     <span className="font-medium text-sm">{f}</span>
                   </li>
                 ))}
               </ul>
               <button onClick={login} className={clsx(
                 "w-full py-4 rounded-2xl font-semibold transition-all duration-300",
-                plan.popular ? "bg-orange-600 text-white hover:bg-orange-500 shadow-lg shadow-orange-900/30" : "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-white/20"
+                plan.popular ? "bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/30" : "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-white/20"
               )}>
                 Get Started
               </button>
@@ -310,7 +310,7 @@ export default function Landing() {
               />
             </div>
             {/* Decorative blobs */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-orange-500/20 blur-[120px] rounded-full -z-10" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-yellow-500/20 blur-[120px] rounded-full -z-10" />
           </div>
         </div>
       </section>
@@ -318,7 +318,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-zinc-200 dark:border-white/10">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">MealFeed<span className="text-orange-500">.</span></div>
+          <div className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">MealFeed<span className="text-yellow-500">.</span></div>
           <p className="text-zinc-500 dark:text-zinc-400 text-sm font-medium">© 2026 MealFeed. All rights reserved.</p>
           <div className="flex gap-8 text-sm font-medium text-zinc-500 dark:text-zinc-400">
             <a href="#" className="hover:text-zinc-900 dark:hover:text-white transition-colors">Privacy</a>

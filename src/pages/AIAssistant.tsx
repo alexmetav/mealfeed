@@ -69,14 +69,14 @@ export default function AIAssistant() {
   if (profile?.subscriptionPlan === 'free' && profile?.role !== 'admin') {
     return (
       <div className="max-w-2xl mx-auto py-24 text-center space-y-8 font-sans">
-        <div className="w-24 h-24 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner shadow-orange-500/20 border border-orange-500/20">
+        <div className="w-24 h-24 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner shadow-yellow-500/20 border border-yellow-500/20">
           <Sparkles className="w-12 h-12" />
         </div>
         <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-white">AI Health Assistant</h1>
         <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto text-lg leading-relaxed">
           Upgrade to AI Pro to unlock personalized health insights, weekly reports, and advanced diet recommendations based on your eating habits.
         </p>
-        <button className="px-10 py-4 bg-orange-600 text-white font-semibold rounded-full hover:bg-orange-500 transition-all duration-300 shadow-lg shadow-orange-900/30 text-lg">
+        <button className="px-10 py-4 bg-yellow-600 text-white font-semibold rounded-full hover:bg-yellow-500 transition-all duration-300 shadow-lg shadow-yellow-900/30 text-lg">
           Upgrade to AI Pro
         </button>
       </div>
@@ -104,7 +104,7 @@ export default function AIAssistant() {
   return (
     <div className="max-w-4xl mx-auto h-[calc(100vh-8rem)] flex flex-col font-sans">
       <div className="flex items-center gap-5 mb-6 shrink-0">
-        <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-purple-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-orange-500/20">
+        <div className="w-14 h-14 bg-gradient-to-br from-yellow-500 to-purple-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-yellow-500/20">
           <Bot className="w-7 h-7" />
         </div>
         <div>
@@ -114,18 +114,18 @@ export default function AIAssistant() {
 
       <div className="flex-1 bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 rounded-[2rem] shadow-2xl shadow-zinc-200/50 dark:shadow-black/50 flex flex-col overflow-hidden relative">
         {/* Subtle background glow */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
         {initializing ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+            <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
           </div>
         ) : (
           <>
             <div className="flex-1 overflow-y-auto p-6 space-y-6 z-10">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center max-w-lg mx-auto space-y-8">
-                  <div className="w-20 h-20 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center mb-2">
+                  <div className="w-20 h-20 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mb-2">
                     <Sparkles className="w-10 h-10" />
                   </div>
                   <div>
@@ -137,19 +137,19 @@ export default function AIAssistant() {
                 messages.map((msg, idx) => (
                   <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {msg.role === 'model' && (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md">
                         <Bot className="w-5 h-5 text-white" />
                       </div>
                     )}
                     <div className={`max-w-[80%] rounded-2xl p-5 ${
                       msg.role === 'user' 
-                        ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/20 rounded-tr-sm' 
+                        ? 'bg-yellow-600 text-white shadow-lg shadow-yellow-900/20 rounded-tr-sm' 
                         : 'bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-zinc-100 rounded-tl-sm'
                     }`}>
                       {msg.role === 'user' ? (
                         <p className="whitespace-pre-wrap">{msg.text}</p>
                       ) : (
-                        <div className="prose dark:prose-invert prose-orange max-w-none prose-p:leading-relaxed prose-sm">
+                        <div className="prose dark:prose-invert prose-yellow max-w-none prose-p:leading-relaxed prose-sm">
                           <ReactMarkdown>{msg.text}</ReactMarkdown>
                         </div>
                       )}
@@ -164,11 +164,11 @@ export default function AIAssistant() {
               )}
               {loading && (
                 <div className="flex gap-4 justify-start">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md">
                     <Bot className="w-5 h-5 text-white" />
                   </div>
                   <div className="bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl rounded-tl-sm p-5 flex items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                    <Loader2 className="w-5 h-5 animate-spin text-yellow-500" />
                     <span className="text-sm text-zinc-500 font-medium">Thinking...</span>
                   </div>
                 </div>
@@ -183,7 +183,7 @@ export default function AIAssistant() {
                     key={i}
                     onClick={() => handleSend(faq)}
                     disabled={loading}
-                    className="whitespace-nowrap px-4 py-2 rounded-full bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
+                    className="whitespace-nowrap px-4 py-2 rounded-full bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 hover:border-yellow-500/50 hover:bg-yellow-500/5 transition-all text-xs font-medium text-zinc-700 dark:text-zinc-300 disabled:opacity-50"
                   >
                     {faq}
                   </button>
@@ -198,13 +198,13 @@ export default function AIAssistant() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask about your diet, nutrition, or health score..."
-                  className="w-full bg-white dark:bg-[#1c1c1e] border border-zinc-300 dark:border-white/20 rounded-full pl-6 pr-14 py-4 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent transition-all shadow-sm"
+                  className="w-full bg-white dark:bg-[#1c1c1e] border border-zinc-300 dark:border-white/20 rounded-full pl-6 pr-14 py-4 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-transparent transition-all shadow-sm"
                   disabled={loading}
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || loading}
-                  className="absolute right-2 p-2.5 bg-orange-600 text-white rounded-full hover:bg-orange-500 disabled:opacity-50 disabled:hover:bg-orange-600 transition-colors shadow-md"
+                  className="absolute right-2 p-2.5 bg-yellow-600 text-white rounded-full hover:bg-yellow-500 disabled:opacity-50 disabled:hover:bg-yellow-600 transition-colors shadow-md"
                 >
                   <Send className="w-5 h-5" />
                 </button>

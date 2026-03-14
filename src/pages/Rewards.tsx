@@ -121,17 +121,17 @@ export default function Rewards() {
 
       {/* Points & Token Dashboard */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl shadow-orange-500/20">
+        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl shadow-yellow-500/20">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-6">
-              <Trophy className="w-6 h-6 text-orange-200" />
-              <span className="font-semibold text-orange-100 uppercase tracking-wider text-sm">Total Points</span>
+              <Trophy className="w-6 h-6 text-yellow-200" />
+              <span className="font-semibold text-yellow-100 uppercase tracking-wider text-sm">Total Points</span>
             </div>
             <div className="text-5xl font-bold tracking-tight mb-2">
               {(profile.points || 0).toLocaleString()}
             </div>
-            <p className="text-orange-200 text-sm">Keep earning by uploading and engaging!</p>
+            <p className="text-yellow-200 text-sm">Keep earning by uploading and engaging!</p>
           </div>
         </div>
 
@@ -155,7 +155,7 @@ export default function Rewards() {
       {/* How to Earn */}
       <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
         <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
-          <ArrowRight className="w-5 h-5 text-orange-500" /> How to Earn
+          <ArrowRight className="w-5 h-5 text-yellow-500" /> How to Earn
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
@@ -294,13 +294,13 @@ export default function Rewards() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h2 className="text-xl font-semibold text-zinc-900 dark:text-white flex items-center gap-2 mb-1">
-              <CalendarIcon className="w-5 h-5 text-orange-500" /> Check-in Streak
+              <CalendarIcon className="w-5 h-5 text-yellow-500" /> Check-in Streak
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Check in daily to build your streak.</p>
           </div>
-          <div className="flex items-center gap-2 bg-orange-500/10 px-4 py-2 rounded-full border border-orange-500/20">
-            <Flame className="w-5 h-5 text-orange-500" />
-            <span className="font-bold text-orange-600 dark:text-orange-400">{profile.streak || 0} Days</span>
+          <div className="flex items-center gap-2 bg-yellow-500/10 px-4 py-2 rounded-full border border-yellow-500/20">
+            <Flame className="w-5 h-5 text-yellow-500" />
+            <span className="font-bold text-yellow-600 dark:text-yellow-400">{profile.streak || 0} Days</span>
           </div>
         </div>
 
@@ -326,9 +326,9 @@ export default function Rewards() {
               className={clsx(
                 "aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all relative",
                 d.checkedIn 
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20" 
+                  ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" 
                   : d.isToday
-                    ? "bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white border-2 border-orange-500"
+                    ? "bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white border-2 border-yellow-500"
                     : d.isFuture
                       ? "bg-zinc-50 dark:bg-white/5 text-zinc-300 dark:text-zinc-600"
                       : "bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400"

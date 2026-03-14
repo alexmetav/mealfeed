@@ -205,7 +205,7 @@ export default function Upload() {
       {!image ? (
         <div 
           onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-zinc-300 dark:border-white/20 rounded-[2rem] p-12 flex flex-col items-center justify-center text-zinc-500 hover:text-orange-500 hover:border-orange-500/50 hover:bg-orange-500/5 transition-all duration-300 cursor-pointer min-h-[400px] bg-zinc-100 dark:bg-white/5 backdrop-blur-xl"
+          className="border-2 border-dashed border-zinc-300 dark:border-white/20 rounded-[2rem] p-12 flex flex-col items-center justify-center text-zinc-500 hover:text-yellow-500 hover:border-yellow-500/50 hover:bg-yellow-500/5 transition-all duration-300 cursor-pointer min-h-[400px] bg-zinc-100 dark:bg-white/5 backdrop-blur-xl"
         >
           <div className="w-20 h-20 bg-zinc-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-inner shadow-white/10">
             <UploadCloud className="w-10 h-10" />
@@ -236,7 +236,7 @@ export default function Upload() {
             <button 
               onClick={handleAnalyze}
               disabled={loading}
-              className="w-full py-4 bg-orange-600 text-white rounded-2xl font-semibold hover:bg-orange-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-orange-900/30 text-lg"
+              className="w-full py-4 bg-yellow-600 text-white rounded-2xl font-semibold hover:bg-yellow-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-yellow-900/30 text-lg"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Analyze Food'}
             </button>
@@ -263,7 +263,7 @@ export default function Upload() {
                   </div>
                   <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Score</p>
-                    <p className="font-semibold text-2xl text-orange-500 tracking-tight">{analysis.healthScore}<span className="text-sm text-zinc-500 font-medium">/100</span></p>
+                    <p className="font-semibold text-2xl text-yellow-500 tracking-tight">{analysis.healthScore}<span className="text-sm text-zinc-500 font-medium">/100</span></p>
                   </div>
                 </div>
 
@@ -298,14 +298,14 @@ export default function Upload() {
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="Write a caption..."
-                  className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-5 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-transparent min-h-[120px] resize-none transition-all"
+                  className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-5 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-transparent min-h-[120px] resize-none transition-all"
                 />
               </div>
 
               <button 
                 onClick={handlePost}
                 disabled={loading}
-                className="w-full py-4 bg-orange-600 text-white rounded-2xl font-semibold hover:bg-orange-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-orange-900/30 text-lg"
+                className="w-full py-4 bg-yellow-600 text-white rounded-2xl font-semibold hover:bg-yellow-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-yellow-900/30 text-lg"
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Share Post'}
               </button>
