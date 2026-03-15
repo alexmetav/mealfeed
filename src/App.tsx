@@ -10,6 +10,7 @@ import DashboardLayout from './components/DashboardLayout';
 import Feed from './pages/Feed';
 import Upload from './pages/Upload';
 import Profile from './pages/Profile';
+import UserProfile from './pages/UserProfile';
 import Health from './pages/Health';
 import AIAssistant from './pages/AIAssistant';
 import Admin from './pages/Admin';
@@ -17,6 +18,7 @@ import Messages from './pages/Messages';
 import Subscription from './pages/Subscription';
 import Rewards from './pages/Rewards';
 import Recommendations from './pages/Recommendations';
+import Notifications from './pages/Notifications';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -45,6 +47,7 @@ export default function App() {
                 <Route path="settings" element={<Profile />} />
                 <Route path="upload" element={<Upload />} />
                 <Route path="profile" element={<Profile />} />
+                <Route path="user/:id" element={<UserProfile />} />
                 <Route path="health" element={<Health />} />
                 <Route path="recommendations" element={<Recommendations />} />
                 <Route path="rewards" element={<Rewards />} />
@@ -52,6 +55,7 @@ export default function App() {
                 <Route path="admin" element={<Admin />} />
                 <Route path="messages" element={<Messages />} />
                 <Route path="subscription" element={<Subscription />} />
+                <Route path="notifications" element={<Notifications />} />
               </Route>
             </Routes>
           </Router>

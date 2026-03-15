@@ -142,11 +142,11 @@ export default function Rewards() {
               <Coins className="w-6 h-6 text-emerald-400" />
               <span className="font-semibold text-zinc-400 uppercase tracking-wider text-sm">Estimated $NUTRI</span>
             </div>
-            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400">
-              {estimatedTokens.toLocaleString()}
+            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400 blur-sm select-none">
+              ???
             </div>
             <p className="text-zinc-400 text-sm flex items-center gap-1">
-              Conversion rate: 1000 Points = 1 $NUTRI
+              Conversion rate is a mystery. Revealed on TGE.
             </p>
           </div>
         </div>

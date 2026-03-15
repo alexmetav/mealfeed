@@ -82,6 +82,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["followerId", "followerName", "followingId", "followingName", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user receiving the notification." },
+        "actorId": { "type": "string", "description": "The ID of the user who performed the action." },
+        "actorName": { "type": "string", "description": "The name of the user who performed the action." },
+        "actorImage": { "type": "string", "description": "The profile image of the actor." },
+        "type": { "type": "string", "enum": ["like", "comment", "follow"], "description": "The type of notification." },
+        "postId": { "type": "string", "description": "The ID of the post, if applicable." },
+        "read": { "type": "boolean", "description": "Whether the notification has been read." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "actorId", "actorName", "type", "read", "createdAt"]
     }
   },
   "firestore": {
@@ -104,6 +120,10 @@
     "/follows/{followId}": {
       "schema": { "$ref": "#/entities/Follow" },
       "description": "Stores user follow relationships."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Stores user notifications."
     }
   }
 }

@@ -58,7 +58,7 @@ export default function Subscription() {
 
   const connectMetaMask = async () => {
     if (!window.ethereum) {
-      alert("MetaMask extension not found. Please install it.");
+      window.open('https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn?pli=1', '_blank');
       return;
     }
     try {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
@@ -6,6 +7,7 @@ import { Heart, MessageCircle, Bookmark, MapPin } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
+import CommentsModal from '../components/CommentsModal';
 
 interface Post {
   id: string;
@@ -34,6 +36,7 @@ export default function Feed() {
   const [loading, setLoading] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [following, setFollowing] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'trending' | 'recent'>('trending');
 
   useEffect(() => {
     if (!user) return;
@@ -45,7 +48,22 @@ export default function Feed() {
   }, [user]);
 
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50));
+    if (!user) return;
+    const q = query(collection(db, 'likes'), where('userId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      setLikedPosts(new Set(snap.docs.map(d => d.data().postId)));
+    });
+    return () => unsub();
+  }, [user]);
+
+  useEffect(() => {
+    setLoading(true);
+    let q;
+    if (activeTab === 'trending') {
+      q = query(collection(db, 'posts'), orderBy('likesCount', 'desc'), limit(50));
+    } else {
+      q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50));
+    }
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
@@ -56,7 +74,7 @@ export default function Feed() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [activeTab]);
 
   const handleFollow = async (authorId: string, authorName: string, authorImage?: string) => {
     if (!user || !profile || authorId === user.uid) return;
@@ -68,11 +86,17 @@ export default function Feed() {
     try {
       if (following.has(authorId)) {
         // Unfollow
+        setFollowing(prev => {
+          const next = new Set(prev);
+          next.delete(authorId);
+          return next;
+        });
         await deleteDoc(followRef);
         await updateDoc(authorRef, { followersCount: increment(-1) });
         await updateDoc(userRef, { followingCount: increment(-1) });
       } else {
         // Follow
+        setFollowing(prev => new Set(prev).add(authorId));
         await setDoc(followRef, { 
           followerId: user.uid, 
           followerName: profile.username,
@@ -84,9 +108,30 @@ export default function Feed() {
         });
         await updateDoc(authorRef, { followersCount: increment(1) });
         await updateDoc(userRef, { followingCount: increment(1) });
+        
+        // Create notification
+        const notificationId = `${user.uid}_follow_${authorId}`;
+        await setDoc(doc(db, 'notifications', notificationId), {
+          userId: authorId,
+          actorId: user.uid,
+          actorName: profile.username,
+          actorImage: profile.profileImage || '',
+          type: 'follow',
+          read: false,
+          createdAt: new Date().toISOString()
+        });
       }
     } catch (error) {
-      console.error('Error following:', error);
+      if (following.has(authorId)) {
+        setFollowing(prev => new Set(prev).add(authorId));
+      } else {
+        setFollowing(prev => {
+          const next = new Set(prev);
+          next.delete(authorId);
+          return next;
+        });
+      }
+      handleFirestoreError(error, OperationType.WRITE, `follows/${followId}`);
     }
   };
 
@@ -103,13 +148,13 @@ export default function Feed() {
     try {
       if (likedPosts.has(postId)) {
         // Unlike
-        await deleteDoc(likeRef);
-        await updateDoc(postRef, { likesCount: increment(-1) });
         setLikedPosts(prev => {
           const next = new Set(prev);
           next.delete(postId);
           return next;
         });
+        await deleteDoc(likeRef);
+        await updateDoc(postRef, { likesCount: increment(-1) });
       } else {
         // Check daily limit
         const isNewDay = profile.lastActionDate !== today;
@@ -121,6 +166,7 @@ export default function Feed() {
         }
 
         // Like
+        setLikedPosts(prev => new Set(prev).add(postId));
         await setDoc(likeRef, {
           userId: user.uid,
           postId,
@@ -142,69 +188,36 @@ export default function Feed() {
           await updateDoc(authorRef, {
             points: increment(50)
           });
+          
+          // Create notification
+          const notificationId = `${user.uid}_like_${postId}`;
+          await setDoc(doc(db, 'notifications', notificationId), {
+            userId: authorId,
+            actorId: user.uid,
+            actorName: profile.username,
+            actorImage: profile.profileImage || '',
+            type: 'like',
+            postId,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
         }
-
-        setLikedPosts(prev => new Set(prev).add(postId));
       }
     } catch (error) {
+      if (likedPosts.has(postId)) {
+        setLikedPosts(prev => new Set(prev).add(postId));
+      } else {
+        setLikedPosts(prev => {
+          const next = new Set(prev);
+          next.delete(postId);
+          return next;
+        });
+      }
       handleFirestoreError(error, OperationType.WRITE, `likes/${likeId}`);
     }
   };
 
-  const [commentText, setCommentText] = useState('');
-  const [activeCommentPost, setActiveCommentPost] = useState<string | null>(null);
-
-  const handleComment = async (postId: string, authorId: string) => {
-    if (!user || !profile || !commentText.trim()) return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const isNewDay = profile.lastActionDate !== today;
-    const currentComments = isNewDay ? 0 : (profile.dailyCommentsCount || 0);
-
-    if (currentComments >= 10) {
-      alert('Daily comment limit (10) reached!');
-      return;
-    }
-
-    const commentId = `${user.uid}_${Date.now()}`;
-    const commentRef = doc(db, 'comments', commentId);
-    const postRef = doc(db, 'posts', postId);
-    const userRef = doc(db, 'users', user.uid);
-    const authorRef = doc(db, 'users', authorId);
-
-    try {
-      await setDoc(commentRef, {
-        postId,
-        userId: user.uid,
-        authorName: profile.username,
-        text: commentText,
-        createdAt: new Date().toISOString()
-      });
-
-      await updateDoc(postRef, { commentsCount: increment(1) });
-
-      // Update points and counts
-      const pointsToEarn = profile.isCreator ? 1000 : 500;
-      await updateDoc(userRef, {
-        points: increment(pointsToEarn),
-        dailyCommentsCount: isNewDay ? 1 : increment(1),
-        lastActionDate: today
-      });
-
-      // Reward author if it's not the same user
-      if (authorId !== user.uid) {
-        await updateDoc(authorRef, {
-          points: increment(500)
-        });
-      }
-
-      setCommentText('');
-      setActiveCommentPost(null);
-      alert('Comment posted! +500 points');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `comments/${commentId}`);
-    }
-  };
+  const [commentsModalPost, setCommentsModalPost] = useState<{id: string, authorId: string} | null>(null);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -215,8 +228,24 @@ export default function Feed() {
       <div className="flex items-center justify-between mb-10">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">Global Feed</h1>
         <div className="flex gap-2 bg-zinc-100 dark:bg-white/5 p-1 rounded-full border border-zinc-200 dark:border-white/10">
-          <button className="px-5 py-2 rounded-full bg-zinc-200 dark:bg-white/10 text-sm font-medium text-zinc-900 dark:text-white shadow-sm">Trending</button>
-          <button className="px-5 py-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:text-white transition-colors text-sm font-medium">Recent</button>
+          <button 
+            onClick={() => setActiveTab('trending')}
+            className={clsx(
+              "px-5 py-2 rounded-full text-sm font-medium transition-colors shadow-sm",
+              activeTab === 'trending' ? "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white" : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:text-white"
+            )}
+          >
+            Trending
+          </button>
+          <button 
+            onClick={() => setActiveTab('recent')}
+            className={clsx(
+              "px-5 py-2 rounded-full text-sm font-medium transition-colors shadow-sm",
+              activeTab === 'recent' ? "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white" : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:text-white"
+            )}
+          >
+            Recent
+          </button>
         </div>
       </div>
 
@@ -230,14 +259,18 @@ export default function Feed() {
             {/* Header */}
             <div className="p-5 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <img 
-                   src={post.authorImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.userId}`} 
-                  alt={post.authorName} 
-                  className="w-11 h-11 rounded-full bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10"
-                />
+                <Link to={`/dashboard/user/${post.userId}`}>
+                  <img 
+                     src={post.authorImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.userId}`} 
+                    alt={post.authorName} 
+                    className="w-11 h-11 rounded-full bg-zinc-200 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 cursor-pointer hover:opacity-80 transition-opacity"
+                  />
+                </Link>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-zinc-900 dark:text-white tracking-tight">{post.authorName}</span>
+                    <Link to={`/dashboard/user/${post.userId}`}>
+                      <span className="font-semibold text-zinc-900 dark:text-white tracking-tight cursor-pointer hover:text-yellow-500 transition-colors">{post.authorName}</span>
+                    </Link>
                     {post.authorIsCreator && (
                       <span className="text-[10px] px-2 py-0.5 bg-blue-500 text-white font-bold rounded-full uppercase tracking-wider shadow-sm shadow-blue-500/20">Creator</span>
                     )}
@@ -318,7 +351,7 @@ export default function Feed() {
                     <Heart className={clsx("w-7 h-7 transition-transform group-hover:scale-110", likedPosts.has(post.id) && "fill-yellow-500 text-yellow-500")} />
                   </button>
                   <button 
-                    onClick={() => setActiveCommentPost(activeCommentPost === post.id ? null : post.id)}
+                    onClick={() => setCommentsModalPost({ id: post.id, authorId: post.userId })}
                     className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:text-white transition-colors group"
                   >
                     <MessageCircle className="w-7 h-7 transition-transform group-hover:scale-110" />
@@ -329,39 +362,35 @@ export default function Feed() {
                 </button>
               </div>
 
-              {activeCommentPost === post.id && (
-                <div className="mb-4 flex gap-2">
-                  <input 
-                    type="text"
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Add a comment..."
-                    className="flex-1 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
-                  />
-                  <button 
-                    onClick={() => handleComment(post.id, post.userId)}
-                    className="px-4 py-2 bg-yellow-600 text-white text-xs font-bold rounded-xl hover:bg-yellow-500 transition-colors"
-                  >
-                    Post
-                  </button>
-                </div>
-              )}
-
               <div className="font-semibold text-sm mb-2 text-zinc-900 dark:text-white">{post.likesCount} likes</div>
               
               <div className="text-sm leading-relaxed">
-                <span className="font-semibold mr-2 text-zinc-900 dark:text-white">{post.authorName}</span>
+                <Link to={`/dashboard/user/${post.userId}`}>
+                  <span className="font-semibold mr-2 text-zinc-900 dark:text-white cursor-pointer hover:text-yellow-500 transition-colors">{post.authorName}</span>
+                </Link>
                 <span className="text-zinc-600 dark:text-zinc-300">{post.caption}</span>
               </div>
               
               {post.commentsCount > 0 && (
-                <button className="text-zinc-500 text-sm mt-3 hover:text-zinc-500 dark:text-zinc-400 font-medium transition-colors">
+                <button 
+                  onClick={() => setCommentsModalPost({ id: post.id, authorId: post.userId })}
+                  className="text-zinc-500 text-sm mt-3 hover:text-zinc-500 dark:text-zinc-400 font-medium transition-colors"
+                >
                   View all {post.commentsCount} comments
                 </button>
               )}
             </div>
           </article>
         ))
+      )}
+
+      {commentsModalPost && (
+        <CommentsModal
+          postId={commentsModalPost.id}
+          postAuthorId={commentsModalPost.authorId}
+          isOpen={!!commentsModalPost}
+          onClose={() => setCommentsModalPost(null)}
+        />
       )}
     </div>
   );
