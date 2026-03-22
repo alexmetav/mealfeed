@@ -5,7 +5,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { UploadCloud, X, Loader2, CheckCircle2, AlertCircle, Camera, Image as ImageIcon } from 'lucide-react';
 import clsx from 'clsx';
-import { openAIVision } from '../services/openaiService';
+import { aiVision } from '../services/aiService';
 import { checkSpam, logActivity } from '../services/spamService';
 
 interface FoodAnalysisResult {
@@ -38,6 +38,7 @@ export default function Upload() {
   const [declineModal, setDeclineModal] = useState<{ show: boolean; attempts: number; isTimeout: boolean } | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -62,7 +63,11 @@ export default function Upload() {
 
   useEffect(() => {
     if (isCameraActive && cameraStream && videoRef.current) {
-      videoRef.current.srcObject = cameraStream;
+      const video = videoRef.current;
+      video.srcObject = cameraStream;
+      video.onloadedmetadata = () => {
+        video.play().catch(err => console.error("Error playing video:", err));
+      };
     }
   }, [isCameraActive, cameraStream]);
 
@@ -164,6 +169,7 @@ export default function Upload() {
 
     setLoading(true);
     setIsAnalyzing(true);
+    setError(null);
     
     let retries = 2;
     while (retries >= 0) {
@@ -185,7 +191,7 @@ export default function Upload() {
         
         Return ONLY the JSON object.`;
 
-        const response = await openAIVision(prompt, base64Data, mimeType);
+        const response = await aiVision(prompt, base64Data, mimeType);
 
         if (response) {
           try {
@@ -236,15 +242,9 @@ export default function Upload() {
         if (retries === 0) {
           let errorMsg = error?.message || 'Unknown error';
           if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429')) {
-            errorMsg = "AI Quota Exceeded. Please wait a minute or check your OpenAI billing settings.";
+            errorMsg = "AI Quota Exceeded. Please wait a minute.";
           }
-          if (errorMsg.toLowerCase().includes('insufficient balance') || errorMsg.includes('402')) {
-            errorMsg = "Insufficient Balance. Please top up your OpenAI account.";
-          }
-          if (errorMsg.toLowerCase().includes('vision') || errorMsg.toLowerCase().includes('image')) {
-            errorMsg = "OpenAI vision model might not be available. Please check your API key permissions or try again later.";
-          }
-          alert(`Failed to analyze image: ${errorMsg}. Please try a different image.`);
+          setError(errorMsg);
         }
         retries--;
         if (retries >= 0) {
@@ -325,6 +325,16 @@ export default function Upload() {
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-2">Upload Food</h1>
         <p className="text-zinc-500 dark:text-zinc-400 text-sm">Share your meal and get health insights.</p>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-500 animate-in fade-in slide-in-from-top-2">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto p-1 hover:bg-red-500/10 rounded-full transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {!image && !isCameraActive ? (
         <div className="space-y-6">
