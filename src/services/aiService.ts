@@ -80,3 +80,30 @@ export const aiChat = async (
     return null;
   }
 };
+export const aiJson = async (prompt: string): Promise<string | null> => {
+  try {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    if (!apiKey) return null;
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant that outputs JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 1000,
+        response_format: { type: 'json_object' }
+      })
+    });
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || null;
+  } catch (error) {
+    console.error('aiJson error:', error);
+    return null;
+  }
+};
