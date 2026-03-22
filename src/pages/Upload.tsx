@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -49,9 +49,6 @@ export default function Upload() {
       });
       setCameraStream(stream);
       setIsCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       
       // Auto-capture after 3 seconds of "scanning"
       setTimeout(() => {
@@ -62,6 +59,12 @@ export default function Upload() {
       alert("Could not access camera. Please check permissions.");
     }
   };
+
+  useEffect(() => {
+    if (isCameraActive && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [isCameraActive, cameraStream]);
 
   const stopCamera = (stream: MediaStream | null) => {
     if (stream) {
@@ -367,6 +370,7 @@ export default function Upload() {
             ref={videoRef} 
             autoPlay 
             playsInline 
+            muted
             className="w-full h-full object-cover"
           />
           
