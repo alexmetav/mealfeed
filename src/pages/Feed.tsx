@@ -9,7 +9,7 @@ import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
 import CommentsModal from '../components/CommentsModal';
 import PostCard from '../components/PostCard';
-import { openAIVision } from '../services/openaiService';
+import { aiVision } from '../services/aiService';
 
 interface Post {
   id: string;
@@ -313,7 +313,7 @@ export default function Feed() {
       
       Return ONLY the JSON object.`;
 
-      const response = await openAIVision(prompt, base64Data, mimeType);
+      const response = await aiVision(prompt, base64Data, mimeType);
 
       if (response) {
         const cleanedText = response.replace(/```json/gi, '').replace(/```/g, '').trim();
