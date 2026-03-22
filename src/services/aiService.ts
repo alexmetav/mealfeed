@@ -1,11 +1,7 @@
 export const generateContent = async (prompt: string): Promise<string | null> => {
   try {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-      console.warn('API key not found');
-      return null;
-    }
-
+    if (!apiKey) return null;
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -18,7 +14,6 @@ export const generateContent = async (prompt: string): Promise<string | null> =>
         max_tokens: 1000
       })
     });
-
     const data = await response.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (error) {
@@ -27,11 +22,10 @@ export const generateContent = async (prompt: string): Promise<string | null> =>
   }
 };
 
-export const analyzeImage = async (prompt: string, imageBase64: string, mimeType: string): Promise<string | null> => {
+export const aiVision = async (prompt: string, imageBase64: string, mimeType: string): Promise<string | null> => {
   try {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
     if (!apiKey) return null;
-
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -50,11 +44,10 @@ export const analyzeImage = async (prompt: string, imageBase64: string, mimeType
         max_tokens: 1000
       })
     });
-
     const data = await response.json();
     return data.choices?.[0]?.message?.content || null;
   } catch (error) {
-    console.error('AI analyze error:', error);
+    console.error('aiVision error:', error);
     return null;
   }
 };
