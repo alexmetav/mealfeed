@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck, ArrowLeft, MessageCircle } from 'lucide-react';
 import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
+import PostModal from '../components/PostModal';
+import CommentsModal from '../components/CommentsModal';
 
 export default function UserProfile() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +22,9 @@ export default function UserProfile() {
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [showFollowingModal, setShowFollowingModal] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [commentsModalPost, setCommentsModalPost] = useState<{id: string, authorId: string} | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -62,6 +67,11 @@ export default function UserProfile() {
         // Check if current user is following
         if (user) {
           setIsFollowing(followersData.some((f: any) => f.followerId === user.uid));
+          
+          // Fetch liked posts
+          const likesQ = query(collection(db, 'likes'), where('userId', '==', user.uid));
+          const likesSnap = await getDocs(likesQ);
+          setLikedPosts(new Set(likesSnap.docs.map(doc => doc.data().postId)));
         }
 
         // Fetch following
@@ -69,7 +79,7 @@ export default function UserProfile() {
         const followingSnap = await getDocs(followingQ);
         setFollowing(followingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'users/posts/follows');
+        handleFirestoreError(error, OperationType.LIST, 'users/posts/follows/likes');
       } finally {
         setLoading(false);
       }
@@ -77,6 +87,62 @@ export default function UserProfile() {
 
     fetchUserData();
   }, [id, user, navigate]);
+
+  const handleLike = async (postId: string, authorId: string) => {
+    if (!user || !profile) return;
+
+    const likeId = `${user.uid}_${postId}`;
+    const likeRef = doc(db, 'likes', likeId);
+    const postRef = doc(db, 'posts', postId);
+
+    try {
+      if (likedPosts.has(postId)) {
+        // Unlike
+        setLikedPosts(prev => {
+          const next = new Set(prev);
+          next.delete(postId);
+          return next;
+        });
+        await deleteDoc(likeRef);
+        await updateDoc(postRef, { likesCount: increment(-1) });
+      } else {
+        // Like
+        setLikedPosts(prev => new Set(prev).add(postId));
+        await setDoc(likeRef, {
+          userId: user.uid,
+          postId,
+          createdAt: new Date().toISOString()
+        });
+        await updateDoc(postRef, { likesCount: increment(1) });
+
+        // Create notification
+        if (user.uid !== authorId) {
+          const notificationId = `${user.uid}_like_${postId}`;
+          await setDoc(doc(db, 'notifications', notificationId), {
+            userId: authorId,
+            actorId: user.uid,
+            actorName: currentUserProfile?.username || user.displayName || 'User',
+            actorImage: currentUserProfile?.profileImage || user.photoURL || '',
+            type: 'like',
+            postId,
+            read: false,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+    } catch (error) {
+      if (likedPosts.has(postId)) {
+        setLikedPosts(prev => new Set(prev).add(postId));
+      } else {
+        setLikedPosts(prev => {
+          const next = new Set(prev);
+          next.delete(postId);
+          return next;
+        });
+      }
+      handleFirestoreError(error, OperationType.WRITE, `likes/${likeId}`);
+    }
+  };
 
   const handleFollowToggle = async () => {
     if (!user || !profile) return;
@@ -279,7 +345,11 @@ export default function UserProfile() {
       ) : (
         <div className="grid grid-cols-3 gap-1 md:gap-4">
           {posts.map(post => (
-            <div key={post.id} className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl">
+            <div 
+              key={post.id} 
+              className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl"
+              onClick={() => setSelectedPost(post)}
+            >
               <img src={post.imageUrl} alt={post.foodType} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
                 <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
@@ -375,6 +445,28 @@ export default function UserProfile() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modals */}
+      {selectedPost && (
+        <PostModal
+          post={selectedPost}
+          isOpen={true}
+          onClose={() => setSelectedPost(null)}
+          currentUserId={user?.uid}
+          isLiked={likedPosts.has(selectedPost.id)}
+          onLike={handleLike}
+          onOpenComments={(postId, authorId) => setCommentsModalPost({ id: postId, authorId })}
+        />
+      )}
+
+      {commentsModalPost && (
+        <CommentsModal
+          postId={commentsModalPost.id}
+          postAuthorId={commentsModalPost.authorId}
+          isOpen={!!commentsModalPost}
+          onClose={() => setCommentsModalPost(null)}
+        />
       )}
     </div>
   );
