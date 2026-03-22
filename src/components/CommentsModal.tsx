@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { X, Send } from 'lucide-react';
 import clsx from 'clsx';
+import { checkSpam, logActivity } from '../services/spamService';
 
 interface Comment {
   id: string;
@@ -21,8 +22,13 @@ interface CommentsModalProps {
   onClose: () => void;
 }
 
+import { usePoints } from '../context/PointsContext';
+
+import { checkAndUpdateDailyLimit } from '../utils/dailyLimits';
+
 export default function CommentsModal({ postId, postAuthorId, isOpen, onClose }: CommentsModalProps) {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  const { showPoints } = usePoints();
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,19 +57,18 @@ export default function CommentsModal({ postId, postAuthorId, isOpen, onClose }:
     e.preventDefault();
     if (!user || !profile || !newComment.trim()) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const isNewDay = profile.lastActionDate !== today;
-    const currentComments = isNewDay ? 0 : (profile.dailyCommentsCount || 0);
-
-    if (currentComments >= 10) {
-      alert('Daily comment limit (10) reached!');
+    // Anti-spam check
+    const spamCheck = await checkSpam(user.uid, 'comment', profile.spamTimeoutUntil);
+    if (spamCheck.isSpam) {
+      const remainingTime = new Date(spamCheck.timeoutUntil!).getTime() - Date.now();
+      const hours = Math.ceil(remainingTime / (1000 * 60 * 60));
+      alert(`Spam activity detected. Your account is timed out for ${hours} more hours.`);
       return;
     }
 
     const commentId = `${user.uid}_${Date.now()}`;
     const commentRef = doc(db, 'comments', commentId);
     const postRef = doc(db, 'posts', postId);
-    const userRef = doc(db, 'users', user.uid);
     const authorRef = doc(db, 'users', postAuthorId);
 
     try {
@@ -77,13 +82,19 @@ export default function CommentsModal({ postId, postAuthorId, isOpen, onClose }:
 
       await updateDoc(postRef, { commentsCount: increment(1) });
 
-      // Update points and counts
-      const pointsToEarn = profile.isCreator ? 1000 : 500;
-      await updateDoc(userRef, {
-        points: increment(pointsToEarn),
-        dailyCommentsCount: isNewDay ? 1 : increment(1),
-        lastActionDate: today
-      });
+      // Log activity for spam detection
+      await logActivity(user.uid, 'comment');
+
+      // Check daily limit and reward points
+      const canEarnPoints = await checkAndUpdateDailyLimit(user.uid, profile, 'COMMENTS');
+
+      if (canEarnPoints) {
+        const pointsToEarn = profile.isCreator ? 1000 : 500;
+        showPoints(pointsToEarn, 'Comment Posted');
+        await updateDoc(doc(db, 'users', user.uid), {
+          points: increment(pointsToEarn)
+        });
+      }
 
       // Reward author if it's not the same user
       if (postAuthorId !== user.uid) {
@@ -105,6 +116,7 @@ export default function CommentsModal({ postId, postAuthorId, isOpen, onClose }:
         });
       }
 
+      await refreshProfile();
       setNewComment('');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `comments/${commentId}`);
