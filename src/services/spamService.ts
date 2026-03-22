@@ -9,6 +9,7 @@ interface SpamCheckResult {
 }
 
 export async function checkSpam(userId: string, type: ActivityType, currentTimeoutUntil?: string): Promise<SpamCheckResult> {
+  // 1. Check if already timed out
   if (currentTimeoutUntil) {
     const timeoutDate = new Date(currentTimeoutUntil);
     if (timeoutDate > new Date()) {
@@ -16,6 +17,7 @@ export async function checkSpam(userId: string, type: ActivityType, currentTimeo
     }
   }
 
+  // 2. Query recent activity (last 5 minutes)
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   const activityQuery = query(
     collection(db, 'activity_logs'),
@@ -26,9 +28,11 @@ export async function checkSpam(userId: string, type: ActivityType, currentTimeo
 
   const snapshot = await getDocs(activityQuery);
   const count = snapshot.size;
+
   const threshold = type === 'comment' ? 15 : 100;
 
   if (count >= threshold) {
+    // 3. Set 24h timeout
     const timeoutUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, {
