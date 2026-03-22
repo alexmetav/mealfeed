@@ -14,6 +14,7 @@ import UserProfile from './pages/UserProfile';
 import Health from './pages/Health';
 import AIAssistant from './pages/AIAssistant';
 import Admin from './pages/Admin';
+import AdminUsers from './pages/AdminUsers';
 import Messages from './pages/Messages';
 import Subscription from './pages/Subscription';
 import Rewards from './pages/Rewards';
@@ -58,6 +59,7 @@ export default function App() {
                   <Route path="leaderboard" element={<Leaderboard />} />
                   <Route path="ai-assistant" element={<AIAssistant />} />
                   <Route path="admin" element={<Admin />} />
+                  <Route path="admin/users" element={<AdminUsers />} />
                   <Route path="messages" element={<Messages />} />
                   <Route path="subscription" element={<Subscription />} />
                   <Route path="notifications" element={<Notifications />} />
