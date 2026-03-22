@@ -2,10 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Bot, Sparkles, Loader2, Send, User as UserIcon, HelpCircle } from 'lucide-react';
+import { Bot, Sparkles, Loader2, Send, User as UserIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { motion } from 'framer-motion';
-import { GoogleGenAI } from '@google/genai';
+import { openAIChat } from '../services/openaiService';
 
 const FAQS = [
   "Analyze my recent meals and give me a weekly summary.",
@@ -16,12 +15,12 @@ const FAQS = [
 
 export default function AIAssistant() {
   const { user, profile } = useAuth();
-  const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([]);
+  const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [systemInstruction, setSystemInstruction] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatRef = useRef<any>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,16 +45,29 @@ export default function AIAssistant() {
         
         let mealContext = "The user hasn't logged any meals recently.";
         if (history.length > 0) {
-          mealContext = "Here are the user's recent meals:\n" + history.map(h => `- ${h.foodType} (${h.healthRating} health rating, ${h.healthScore}/100 score)`).join('\n');
+          mealContext = "Here are the user's recent meals (most recent first):\n" + history.map(h => `- ${h.foodType} (${h.healthRating} health rating, ${h.healthScore}/100 score, logged at ${new Date(h.createdAt).toLocaleDateString()}). Nutritional info: ${h.nutritionInfo}`).join('\n');
         }
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        chatRef.current = ai.chats.create({
-          model: "gemini-3-flash-preview",
-          config: {
-            systemInstruction: `You are a helpful nutrition and health assistant for the MealFeed app. Provide concise, accurate, and encouraging advice. ${mealContext}`,
-          },
-        });
+        const userContext = `User Profile:
+- Role: ${profile?.role || 'user'}
+- Subscription: ${profile?.subscriptionPlan || 'free'}
+- Total Points: ${profile?.points || 0}
+`;
+
+        setSystemInstruction(`You are a helpful, expert nutrition and health assistant for the MealFeed app. 
+Your goal is to provide concise, accurate, and highly personalized encouraging advice based on the user's data.
+
+${userContext}
+
+${mealContext}
+
+Guidelines:
+1. Be encouraging and supportive.
+2. Provide actionable, specific advice based on their recent meals.
+3. If they ask for a weekly summary, analyze the trends in their recent meals (e.g., too much sugar, good protein intake).
+4. Keep responses concise and easy to read, using markdown formatting (bullet points, bold text) where appropriate.
+5. Do not give medical advice. Remind them to consult a doctor for serious concerns.
+`);
       } catch (error) {
         handleFirestoreError(error, OperationType.LIST, 'posts');
       } finally {
@@ -84,18 +96,31 @@ export default function AIAssistant() {
   }
 
   const handleSend = async (text: string) => {
-    if (!text.trim() || !chatRef.current) return;
+    if (!text.trim()) return;
     
-    setMessages(prev => [...prev, { role: 'user', text }]);
+    const newMessages = [...messages, { role: 'user' as const, content: text }];
+    setMessages(newMessages);
     setInput('');
     setLoading(true);
 
     try {
-      const response = await chatRef.current.sendMessage({ message: text });
-      setMessages(prev => [...prev, { role: 'model', text: response.text }]);
-    } catch (error) {
+      const response = await openAIChat(
+        newMessages.map(m => ({ role: m.role, content: m.content })),
+        systemInstruction
+      );
+      if (response) {
+        setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+      }
+    } catch (error: any) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'model', text: "Sorry, I encountered an error communicating with the AI. Please try again." }]);
+      let errorMsg = "Sorry, I encountered an error communicating with the AI. Please try again.";
+      if (error.message?.toLowerCase().includes('quota') || error.message?.includes('429')) {
+        errorMsg = "AI Quota Exceeded. Please wait a minute or check your OpenAI billing settings.";
+      }
+      if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
+        errorMsg = "Insufficient Balance. Please top up your OpenAI account.";
+      }
+      setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }]);
     } finally {
       setLoading(false);
     }
@@ -113,7 +138,6 @@ export default function AIAssistant() {
       </div>
 
       <div className="flex-1 bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 rounded-[2rem] shadow-2xl shadow-zinc-200/50 dark:shadow-black/50 flex flex-col overflow-hidden relative">
-        {/* Subtle background glow */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
         
         {initializing ? (
@@ -136,7 +160,7 @@ export default function AIAssistant() {
               ) : (
                 messages.map((msg, idx) => (
                   <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'model' && (
+                    {msg.role === 'assistant' && (
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md">
                         <Bot className="w-5 h-5 text-white" />
                       </div>
@@ -147,10 +171,10 @@ export default function AIAssistant() {
                         : 'bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-zinc-100 rounded-tl-sm'
                     }`}>
                       {msg.role === 'user' ? (
-                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
                       ) : (
                         <div className="prose dark:prose-invert prose-yellow max-w-none prose-p:leading-relaxed prose-sm">
-                          <ReactMarkdown>{msg.text}</ReactMarkdown>
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
                       )}
                     </div>
