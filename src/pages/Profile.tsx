@@ -8,7 +8,7 @@ import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PostModal from '../components/PostModal';
 import CommentsModal from '../components/CommentsModal';
-import { openAIVision } from '../services/openaiService';
+import { aiVision } from '../services/aiService';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePoints } from '../context/PointsContext';
@@ -218,7 +218,7 @@ export default function Profile() {
       
       Return ONLY the JSON object.`;
 
-      const response = await openAIVision(prompt, base64Data, mimeType);
+      const response = await aiVision(prompt, base64Data, mimeType);
 
       if (response) {
         const cleanedText = response.replace(/```json/gi, '').replace(/```/g, '').trim();
