@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Heart, MessageCircle, UserPlus, CheckCircle2, Bell } from 'lucide-react';
+import { Heart, MessageCircle, UserPlus, CheckCircle2, Bell, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 
@@ -12,10 +12,12 @@ interface Notification {
   actorId: string;
   actorName: string;
   actorImage: string;
-  type: 'like' | 'comment' | 'follow';
+  type: 'like' | 'comment' | 'follow' | 'message' | 'admin_message';
   postId?: string;
+  message?: string;
   read: boolean;
   createdAt: string;
+  link?: string;
 }
 
 export default function Notifications() {
@@ -114,25 +116,33 @@ export default function Notifications() {
                 />
               </Link>
               
-              <div className="flex-1 min-w-0">
+              <Link to={notification.link || (notification.postId ? `/dashboard/feed?post=${notification.postId}` : `/dashboard/user/${notification.actorId}`)} className="flex-1 min-w-0" onClick={() => !notification.read && markAsRead(notification.id)}>
                 <p className="text-sm text-zinc-900 dark:text-white">
-                  <Link to={`/dashboard/user/${notification.actorId}`} className="font-semibold hover:underline" onClick={(e) => e.stopPropagation()}>
+                  <span className="font-semibold hover:underline">
                     {notification.actorName}
-                  </Link>
+                  </span>
                   {' '}
                   {notification.type === 'like' && 'liked your post.'}
                   {notification.type === 'comment' && 'commented on your post.'}
                   {notification.type === 'follow' && 'started following you.'}
+                  {notification.type === 'message' && 'sent you a message.'}
+                  {notification.type === 'admin_message' && (
+                    <>
+                      sent you an official message: <span className="italic text-zinc-600 dark:text-zinc-400">"{notification.message}"</span>
+                    </>
+                  )}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                   {new Date(notification.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 </p>
-              </div>
+              </Link>
 
               <div className="shrink-0">
                 {notification.type === 'like' && <Heart className="w-5 h-5 text-red-500 fill-red-500" />}
                 {notification.type === 'comment' && <MessageCircle className="w-5 h-5 text-blue-500 fill-blue-500" />}
                 {notification.type === 'follow' && <UserPlus className="w-5 h-5 text-emerald-500" />}
+                {notification.type === 'message' && <MessageSquare className="w-5 h-5 text-yellow-500 fill-yellow-500" />}
+                {notification.type === 'admin_message' && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
               </div>
             </div>
           ))}
