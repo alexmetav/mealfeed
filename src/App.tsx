@@ -19,6 +19,7 @@ import Subscription from './pages/Subscription';
 import Rewards from './pages/Rewards';
 import Recommendations from './pages/Recommendations';
 import Notifications from './pages/Notifications';
+import Leaderboard from './pages/Leaderboard';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -27,38 +28,43 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+import { PointsProvider } from './context/PointsContext';
+
 export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
         <AuthProvider>
-          <Router>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <DashboardLayout />
-                </ProtectedRoute>
-              }>
-                <Route index element={<Feed />} />
-                <Route path="explore" element={<Feed />} />
-                <Route path="saved" element={<Feed />} />
-                <Route path="settings" element={<Profile />} />
-                <Route path="upload" element={<Upload />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="user/:id" element={<UserProfile />} />
-                <Route path="health" element={<Health />} />
-                <Route path="recommendations" element={<Recommendations />} />
-                <Route path="rewards" element={<Rewards />} />
-                <Route path="ai-assistant" element={<AIAssistant />} />
-                <Route path="admin" element={<Admin />} />
-                <Route path="messages" element={<Messages />} />
-                <Route path="subscription" element={<Subscription />} />
-                <Route path="notifications" element={<Notifications />} />
-              </Route>
-            </Routes>
-          </Router>
+          <PointsProvider>
+            <Router>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <DashboardLayout />
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<Feed />} />
+                  <Route path="explore" element={<Feed />} />
+                  <Route path="saved" element={<Feed />} />
+                  <Route path="settings" element={<Profile />} />
+                  <Route path="upload" element={<Upload />} />
+                  <Route path="profile" element={<Profile />} />
+                  <Route path="user/:id" element={<UserProfile />} />
+                  <Route path="health" element={<Health />} />
+                  <Route path="recommendations" element={<Recommendations />} />
+                  <Route path="rewards" element={<Rewards />} />
+                  <Route path="leaderboard" element={<Leaderboard />} />
+                  <Route path="ai-assistant" element={<AIAssistant />} />
+                  <Route path="admin" element={<Admin />} />
+                  <Route path="messages" element={<Messages />} />
+                  <Route path="subscription" element={<Subscription />} />
+                  <Route path="notifications" element={<Notifications />} />
+                </Route>
+              </Routes>
+            </Router>
+          </PointsProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
