@@ -1,6 +1,9 @@
-import { useState } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
-import { Utensils, Globe, Target, ShoppingCart, Activity, Flame, ChevronRight, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Utensils, Globe, Target, ShoppingCart, Activity, Flame, ChevronRight, Loader2, Candy, Pizza } from 'lucide-react';
+import { openAIJson } from '../services/openaiService';
+import { useAuth } from '../context/AuthContext';
+import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 
 interface MealRecommendation {
   name: string;
@@ -12,12 +15,41 @@ interface MealRecommendation {
   groceryList: string[];
 }
 
+interface UserPost {
+  foodType: string;
+  healthScore: number;
+}
+
 export default function Recommendations() {
+  const { user } = useAuth();
   const [goal, setGoal] = useState('Weight Loss');
   const [healthLevel, setHealthLevel] = useState('Very Healthy');
+  const [recType, setRecType] = useState('Healthy Lifestyle');
   const [cuisine, setCuisine] = useState('');
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<MealRecommendation[]>([]);
+  const [userPosts, setUserPosts] = useState<UserPost[]>([]);
+
+  useEffect(() => {
+    const fetchUserPosts = async () => {
+      if (!user) return;
+      try {
+        const q = query(
+          collection(db, 'posts'),
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          limit(5)
+        );
+        const snapshot = await getDocs(q);
+        const posts = snapshot.docs.map(doc => doc.data() as UserPost);
+        setUserPosts(posts);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, 'posts');
+      }
+    };
+
+    fetchUserPosts();
+  }, [user]);
 
   const handleGenerate = async () => {
     if (!cuisine.trim()) {
@@ -27,54 +59,77 @@ export default function Recommendations() {
 
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
+      const recentMeals = userPosts
+        .map(p => p.foodType)
+        .filter(Boolean)
+        .join(', ');
+
       const prompt = `Act as an expert nutritionist. The user wants meal recommendations.
+      
+      User's Recent Meals: ${recentMeals || 'No recent data'}
+      Recommendation Type: ${recType}
       Goal: ${goal}
       Health Level: ${healthLevel}
       Cuisine/Country: ${cuisine}
       
-      Provide 3 meal options that fit these criteria. For each meal, include:
-      - Meal Name
-      - Description
-      - Estimated Calories, Protein (g), Carbs (g), Fat (g)
-      - A short grocery list of items to buy from the market.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING, description: "Name of the meal" },
-                description: { type: Type.STRING, description: "Short description of the meal" },
-                calories: { type: Type.NUMBER, description: "Estimated calories" },
-                protein: { type: Type.NUMBER, description: "Estimated protein in grams" },
-                carbs: { type: Type.NUMBER, description: "Estimated carbs in grams" },
-                fat: { type: Type.NUMBER, description: "Estimated fat in grams" },
-                groceryList: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: "List of ingredients to buy from the market"
-                }
-              },
-              required: ["name", "description", "calories", "protein", "carbs", "fat", "groceryList"]
-            }
+      Based on their recent meals, suggest 3 ${recType === 'Healthy Lifestyle' ? 'balanced meals' : recType} that fit their goal and health level.
+      If the type is "Safe Street Food", suggest healthier versions of popular street foods from the specified cuisine.
+      If the type is "Healthy Sweets", suggest low-calorie or high-protein sweet alternatives that satisfy cravings.
+      
+      Return the response as a JSON object with a "meals" key containing an array of objects.
+      Each meal object must have these fields:
+      - name: string
+      - description: string
+      - calories: number
+      - protein: number
+      - carbs: number
+      - fat: number
+      - groceryList: string[] (list of items to buy from the market)
+      
+      Example format:
+      {
+        "meals": [
+          {
+            "name": "Grilled Chicken Salad",
+            "description": "A fresh salad with grilled chicken breast...",
+            "calories": 350,
+            "protein": 35,
+            "carbs": 10,
+            "fat": 15,
+            "groceryList": ["Chicken breast", "Mixed greens", "Olive oil"]
           }
-        }
-      });
+        ]
+      }`;
 
-      if (response.text) {
-        const data = JSON.parse(response.text.trim());
-        setRecommendations(data);
+      const response = await openAIJson(prompt);
+      
+      if (response) {
+        let cleanedResponse = response.trim();
+        // Remove markdown code blocks if present
+        if (cleanedResponse.startsWith('```')) {
+          cleanedResponse = cleanedResponse.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        }
+        
+        const data = JSON.parse(cleanedResponse);
+        // Handle both direct array and object with array
+        const finalData = Array.isArray(data) ? data : (data.meals || data.recommendations || data.options || []);
+        
+        if (finalData.length === 0) {
+          throw new Error("No recommendations found in AI response");
+        }
+        
+        setRecommendations(finalData);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating recommendations:', error);
-      alert('Failed to generate recommendations. Please try again.');
+      let errorMsg = 'Failed to generate recommendations. Please try again.';
+      if (error.message?.toLowerCase().includes('quota') || error.message?.includes('429')) {
+        errorMsg = "AI Quota Exceeded. Please wait a minute or check your OpenAI billing settings.";
+      }
+      if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
+        errorMsg = "Insufficient Balance. Please top up your OpenAI account.";
+      }
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -89,7 +144,23 @@ export default function Recommendations() {
 
       {/* Form Section */}
       <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* Recommendation Type */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
+              <Utensils className="w-4 h-4 text-orange-500" /> Recommendation Type
+            </label>
+            <select 
+              value={recType}
+              onChange={(e) => setRecType(e.target.value)}
+              className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+            >
+              <option value="Healthy Lifestyle">Healthy Lifestyle</option>
+              <option value="Safe Street Food">Safe Street Food</option>
+              <option value="Healthy Sweets">Healthy Sweets</option>
+            </select>
+          </div>
+
           {/* Goal */}
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-white">
