@@ -38,12 +38,14 @@ export default function CommentsModal({ postId, postAuthorId, isOpen, onClose }:
 
     const q = query(
       collection(db, 'comments'),
-      where('postId', '==', postId),
-      orderBy('createdAt', 'asc')
+      where('postId', '==', postId)
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Comment)));
+      const fetchedComments = snap.docs.map(d => ({ id: d.id, ...d.data() } as Comment));
+      // Sort in memory to avoid composite index requirement
+      fetchedComments.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      setComments(fetchedComments);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'comments');
