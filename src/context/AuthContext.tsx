@@ -19,6 +19,7 @@ interface UserProfile {
   lastCheckIn?: string;
   dailyLikesCount: number;
   dailyCommentsCount: number;
+  dailyPostsCount: number;
   lastActionDate?: string;
   checkInHistory?: string[];
   referralCode?: string;
@@ -28,6 +29,9 @@ interface UserProfile {
   followingCount?: number;
   postsCount?: number;
   isCreator?: boolean;
+  spamTimeoutUntil?: string;
+  failedScanCount?: number;
+  scanTimeoutUntil?: string;
 }
 
 interface AuthContextType {
@@ -103,12 +107,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               streak: 0,
               dailyLikesCount: 0,
               dailyCommentsCount: 0,
+              dailyPostsCount: 0,
               referralCode: currentUser.uid.slice(0, 8).toUpperCase(),
               referralsCount: 0,
               followersCount: 0,
               followingCount: 0,
               postsCount: 0,
               isCreator: false,
+              failedScanCount: 0,
             };
             await setDoc(userRef, newProfile);
             setProfile(newProfile);
