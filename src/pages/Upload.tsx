@@ -1,359 +1,551 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { collection, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Trophy, Coins, Flame, Calendar as CalendarIcon, ArrowRight, CheckCircle2, Users, Star, Copy, Loader2 } from 'lucide-react';
-import { doc, updateDoc, collection, query, where, getDocs, increment } from 'firebase/firestore';
-import { db } from '../firebase';
+import { UploadCloud, X, Loader2, CheckCircle2, AlertCircle, Camera, Image as ImageIcon } from 'lucide-react';
 import clsx from 'clsx';
+import { openAIVision } from '../services/openaiService';
+import { checkSpam, logActivity } from '../services/spamService';
 
-import { motion, AnimatePresence } from 'framer-motion';
+interface FoodAnalysisResult {
+  isFood: boolean;
+  foodType: string;
+  category: string;
+  healthRating: 'High' | 'Medium' | 'Low';
+  healthScore: number;
+  healthTips: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
 import { usePoints } from '../context/PointsContext';
 
-export default function Rewards() {
+import { checkAndUpdateDailyLimit } from '../utils/dailyLimits';
+
+export default function Upload() {
   const { user, profile, refreshProfile } = useAuth();
   const { showPoints } = usePoints();
-  const [referralInput, setReferralInput] = useState('');
-  const [referralLoading, setReferralLoading] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
+  const navigate = useNavigate();
+  const [image, setImage] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string>('');
+  const [caption, setCaption] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<FoodAnalysisResult | null>(null);
+  const [declineModal, setDeclineModal] = useState<{ show: boolean; attempts: number; isTimeout: boolean } | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  if (!profile || !user) return null;
-
-  const handleCopyReferral = () => {
-    const code = profile.referralCode || user.uid.slice(0, 8).toUpperCase();
-    navigator.clipboard.writeText(code);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      setCameraStream(stream);
+      setIsCameraActive(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      
+      // Auto-capture after 3 seconds of "scanning"
+      setTimeout(() => {
+        capturePhoto(stream);
+      }, 3500);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      alert("Could not access camera. Please check permissions.");
+    }
   };
 
-  const handleSubmitReferral = async () => {
-    if (!referralInput.trim()) return;
-    if (profile.referredBy) {
-      alert('You have already used a referral code.');
-      return;
+  const stopCamera = (stream: MediaStream | null) => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
     }
-    const myCode = profile.referralCode || user.uid.slice(0, 8).toUpperCase();
-    if (referralInput.toUpperCase() === myCode) {
-      alert('You cannot use your own referral code.');
-      return;
+    setCameraStream(null);
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = (stream: MediaStream) => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      setImage(dataUrl);
+      setMimeType('image/jpeg');
+      stopCamera(stream);
+      // Trigger analysis automatically
+      setTimeout(() => {
+        handleAnalyze(dataUrl);
+      }, 100);
     }
+  };
 
-    setReferralLoading(true);
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('referralCode', '==', referralInput.toUpperCase()));
-      const snapshot = await getDocs(q);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      if (snapshot.empty) {
-        alert('Invalid referral code.');
-        setReferralLoading(false);
+    // Resize image to fit in Firestore (max 1MB, let's aim for ~100KB)
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        if (ctx) {
+          // Fill with white background to prevent transparent PNG/WebP from turning black
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setImage(dataUrl);
+        setMimeType('image/jpeg');
+      };
+      img.onerror = () => {
+        alert("Failed to load image. The file might be corrupted or unsupported.");
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      alert("Failed to read the file.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyze = async (autoImage?: string) => {
+    const currentImage = autoImage || image;
+    if (!currentImage || !user || !profile) return;
+
+    // Check timeout
+    if (profile.scanTimeoutUntil) {
+      const timeoutDate = new Date(profile.scanTimeoutUntil);
+      if (timeoutDate > new Date()) {
+        setDeclineModal({ show: true, attempts: 3, isTimeout: true });
         return;
       }
-
-      const referrerDoc = snapshot.docs[0];
-      const referrerId = referrerDoc.id;
-
-      // Update current user
-      const userRef = doc(db, 'users', user.uid);
-      showPoints(1000, 'Referral Bonus');
-      await updateDoc(userRef, {
-        referredBy: referralInput.toUpperCase(),
-        points: increment(1000)
-      });
-
-      // Update referrer
-      const referrerRef = doc(db, 'users', referrerId);
-      await updateDoc(referrerRef, {
-        referralsCount: increment(1),
-        points: increment(5000)
-      });
-
-      alert('Referral code applied! You earned 1000 points.');
-      setReferralInput('');
-      refreshProfile();
-    } catch (error) {
-      console.error(error);
-      alert('Error applying referral code.');
     }
-    setReferralLoading(false);
-  };
 
-  const handleClaimCreator = async () => {
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { isCreator: true });
-      alert('Congratulations! You are now a Creator. Enjoy your 2x points boost!');
-      refreshProfile();
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  // Calculate estimated tokens (e.g., 1000 points = 1 $NUTRI)
-  const estimatedTokens = Math.floor((profile.points || 0) / 1000);
-  
-  // Generate calendar days for the current month
-  const today = new Date();
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
-  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
-  
-  const checkInHistory = profile.checkInHistory || [];
-  
-  const days = Array.from({ length: daysInMonth }, (_, i) => {
-    const date = new Date(currentYear, currentMonth, i + 1);
-    // Format as YYYY-MM-DD in local time to match check-in logic
-    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    setLoading(true);
+    setIsAnalyzing(true);
     
-    return {
-      day: i + 1,
-      dateString,
-      checkedIn: checkInHistory.includes(dateString),
-      isToday: dateString === todayString,
-      isFuture: date > today
-    };
-  });
+    let retries = 2;
+    while (retries >= 0) {
+      try {
+        const base64Data = currentImage.split(',')[1];
+        
+        const prompt = `Analyze this image. First, determine if it is a food item. Live animals or non-food objects should be marked as NOT food.
+        Provide the following information in a JSON format:
+        - isFood: boolean (true if it's food, false otherwise)
+        - foodType: Name of the food (or "Not Food" if isFood is false)
+        - category: Category like Breakfast, Lunch, Snack, etc. (or "None" if isFood is false)
+        - healthRating: Must be exactly 'High', 'Medium', or 'Low' (or "Low" if isFood is false)
+        - healthScore: Score from 0 to 100 (or 0 if isFood is false)
+        - healthTips: Short health tip (or "Please scan correct food" if isFood is false)
+        - calories: Estimated calories (or 0 if isFood is false)
+        - protein: Estimated protein in grams (or 0 if isFood is false)
+        - carbs: Estimated carbs in grams (or 0 if isFood is false)
+        - fat: Estimated fat in grams (or 0 if isFood is false)
+        
+        Return ONLY the JSON object.`;
 
-  // Pad the beginning of the month
-  const paddingDays = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+        const response = await openAIVision(prompt, base64Data, mimeType);
+
+        if (response) {
+          try {
+            const cleanedText = response.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsedResult = JSON.parse(cleanedText) as FoodAnalysisResult;
+            
+            if (!parsedResult.isFood) {
+              const newFailedCount = (profile.failedScanCount || 0) + 1;
+              const updates: any = {
+                failedScanCount: newFailedCount
+              };
+
+              if (newFailedCount >= 3) {
+                const timeoutUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+                updates.scanTimeoutUntil = timeoutUntil;
+                updates.failedScanCount = 0; // Reset after timeout is set
+                setDeclineModal({ show: true, attempts: 3, isTimeout: true });
+              } else {
+                setDeclineModal({ show: true, attempts: newFailedCount, isTimeout: false });
+              }
+
+              await updateDoc(doc(db, 'users', user.uid), updates);
+              await refreshProfile();
+              setLoading(false);
+              setIsAnalyzing(false);
+              return;
+            }
+
+            // If it is food, reset failed count
+            if (profile.failedScanCount && profile.failedScanCount > 0) {
+              await updateDoc(doc(db, 'users', user.uid), {
+                failedScanCount: 0
+              });
+              await refreshProfile();
+            }
+
+            setAnalysis(parsedResult);
+            break; // Success, exit loop
+          } catch (parseError) {
+            console.error("JSON Parse Error:", parseError, "Raw Text:", response);
+            throw new Error("Failed to parse AI response format");
+          }
+        } else {
+          throw new Error("Empty response from AI");
+        }
+      } catch (error: any) {
+        console.error(`Analysis failed (retries left: ${retries}):`, error);
+        if (retries === 0) {
+          let errorMsg = error?.message || 'Unknown error';
+          if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429')) {
+            errorMsg = "AI Quota Exceeded. Please wait a minute or check your OpenAI billing settings.";
+          }
+          if (errorMsg.toLowerCase().includes('insufficient balance') || errorMsg.includes('402')) {
+            errorMsg = "Insufficient Balance. Please top up your OpenAI account.";
+          }
+          if (errorMsg.toLowerCase().includes('vision') || errorMsg.toLowerCase().includes('image')) {
+            errorMsg = "OpenAI vision model might not be available. Please check your API key permissions or try again later.";
+          }
+          alert(`Failed to analyze image: ${errorMsg}. Please try a different image.`);
+        }
+        retries--;
+        if (retries >= 0) {
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s before retry
+        }
+      }
+    }
+    setLoading(false);
+    setIsAnalyzing(false);
+  };
+
+  const handlePost = async () => {
+    if (!user || !profile || !image || !analysis) return;
+    
+    // Anti-spam check
+    const spamCheck = await checkSpam(user.uid, 'post', profile.spamTimeoutUntil);
+    if (spamCheck.isSpam) {
+      const remainingTime = new Date(spamCheck.timeoutUntil!).getTime() - Date.now();
+      const hours = Math.ceil(remainingTime / (1000 * 60 * 60));
+      alert(`Spam activity detected. Your account is timed out for ${hours} more hours.`);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const postRef = doc(collection(db, 'posts'));
+      await setDoc(postRef, {
+        userId: user.uid,
+        authorName: profile.username,
+        authorImage: profile.profileImage,
+        authorIsCreator: profile.isCreator || false,
+        imageUrl: image,
+        foodType: analysis.foodType,
+        category: analysis.category,
+        healthRating: analysis.healthRating,
+        healthScore: analysis.healthScore,
+        calories: analysis.calories,
+        protein: analysis.protein,
+        carbs: analysis.carbs,
+        fat: analysis.fat,
+        caption,
+        likesCount: 0,
+        commentsCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+      
+      // Log activity for spam detection
+      await logActivity(user.uid, 'post');
+      
+      // Check daily limit and reward points
+      const canEarnPoints = await checkAndUpdateDailyLimit(user.uid, profile, 'POSTS');
+      
+      if (canEarnPoints) {
+        const pointsToEarn = profile.isCreator ? 200 : 100;
+        showPoints(pointsToEarn, 'Meal Shared');
+        await updateDoc(doc(db, 'users', user.uid), {
+          points: increment(pointsToEarn),
+          postsCount: increment(1)
+        });
+      } else {
+        await updateDoc(doc(db, 'users', user.uid), {
+          postsCount: increment(1)
+        });
+      }
+      
+      await refreshProfile();
+      navigate('/dashboard');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'posts');
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="max-w-3xl mx-auto pb-24 font-sans space-y-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-2">Rewards & TGE</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm">Earn points and convert them to $NUTRI tokens.</p>
+    <div className="max-w-2xl mx-auto pb-24 font-sans">
+      <div className="mb-10">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-2">Upload Food</h1>
+        <p className="text-zinc-500 dark:text-zinc-400 text-sm">Share your meal and get health insights.</p>
       </div>
 
-      {/* Points & Token Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl shadow-yellow-500/20">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-6">
-              <Trophy className="w-6 h-6 text-yellow-200" />
-              <span className="font-semibold text-yellow-100 uppercase tracking-wider text-sm">Total Points</span>
-            </div>
-            <motion.div 
-              key={profile.points}
-              initial={{ scale: 1 }}
-              animate={{ scale: [1, 1.1, 1] }}
-              className="text-5xl font-bold tracking-tight mb-2"
-            >
-              {(profile.points || 0).toLocaleString()}
-            </motion.div>
-            <p className="text-yellow-200 text-sm">Keep earning by uploading and engaging!</p>
-          </div>
-        </div>
-
-        <div className="bg-zinc-900 dark:bg-[#1c1c1e] rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-2 mb-6">
-              <Coins className="w-6 h-6 text-emerald-400" />
-              <span className="font-semibold text-zinc-400 uppercase tracking-wider text-sm">Estimated $NUTRI</span>
-            </div>
-            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400">
-              {estimatedTokens.toLocaleString()}
-            </div>
-            <p className="text-zinc-400 text-sm flex items-center gap-1">
-              Conversion rate: 1,000 Points = 1 $NUTRI
-            </p>
-            <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
-              <p className="text-xs text-emerald-300 leading-relaxed">
-                <strong>TGE (Token Generation Event)</strong> is scheduled for Q4 2026. Your points will automatically convert to $NUTRI tokens on the BNB Smart Chain.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* How to Earn */}
-      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
-          <ArrowRight className="w-5 h-5 text-yellow-500" /> How to Earn
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
-            <div className="font-bold text-lg text-zinc-900 dark:text-white mb-1">+1,000</div>
-            <div className="text-sm text-zinc-500 dark:text-zinc-400">Daily Check-in</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
-            <div className="font-bold text-lg text-zinc-900 dark:text-white mb-1">+100</div>
-            <div className="text-sm text-zinc-500 dark:text-zinc-400">Upload a Meal</div>
-          </div>
-          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
-            <div className="font-bold text-lg text-zinc-900 dark:text-white mb-1">+50</div>
-            <div className="text-sm text-zinc-500 dark:text-zinc-400">Like a Post</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Creator Program */}
-      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
-            <Star className="w-5 h-5 text-blue-500" /> Creator Program
-          </h2>
-          {profile.isCreator && (
-            <span className="px-3 py-1 bg-blue-500/10 text-blue-500 rounded-full text-xs font-bold uppercase tracking-wider border border-blue-500/20">
-              Active (2x Boost)
-            </span>
-          )}
-        </div>
-        
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-          Become a Creator to earn 2x points on all activities! Requirements: 10 followers and 5 posts.
-        </p>
-
-        <div className="space-y-4 mb-6">
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-zinc-900 dark:text-white font-medium">Followers</span>
-              <span className="text-zinc-500 dark:text-zinc-400">{profile.followersCount || 0} / 10</span>
-            </div>
-            <div className="w-full bg-zinc-100 dark:bg-white/5 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(((profile.followersCount || 0) / 10) * 100, 100)}%` }}
-              />
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-zinc-900 dark:text-white font-medium">Posts</span>
-              <span className="text-zinc-500 dark:text-zinc-400">{profile.postsCount || 0} / 5</span>
-            </div>
-            <div className="w-full bg-zinc-100 dark:bg-white/5 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-500" 
-                style={{ width: `${Math.min(((profile.postsCount || 0) / 5) * 100, 100)}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {!profile.isCreator && (
-          <button 
-            onClick={handleClaimCreator}
-            disabled={(profile.followersCount || 0) < 10 || (profile.postsCount || 0) < 5}
-            className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-500 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
+      {!image && !isCameraActive ? (
+        <div className="space-y-6">
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-zinc-300 dark:border-white/20 rounded-[2rem] p-12 flex flex-col items-center justify-center text-zinc-500 hover:text-yellow-500 hover:border-yellow-500/50 hover:bg-yellow-500/5 transition-all duration-300 cursor-pointer min-h-[300px] bg-zinc-100 dark:bg-white/5 backdrop-blur-xl"
           >
-            Claim Creator Badge
-          </button>
-        )}
-      </div>
+            <div className="w-20 h-20 bg-zinc-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-inner shadow-white/10">
+              <UploadCloud className="w-10 h-10" />
+            </div>
+            <p className="text-xl font-medium mb-2 text-zinc-900 dark:text-white">Share your meal</p>
+            <p className="text-sm">JPEG, PNG up to 5MB</p>
+          </div>
 
-      {/* Refer & Earn */}
-      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
-          <Users className="w-5 h-5 text-emerald-500" /> Refer & Earn
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Your Code */}
-          <div>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              Share your code with friends. When they sign up and use it, you earn <strong className="text-emerald-500">5,000 points</strong> and they earn 1,000 points!
-            </p>
-            <div className="bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl p-4 flex items-center justify-between mb-4">
-              <div className="font-mono text-lg font-bold text-zinc-900 dark:text-white tracking-widest">
-                {profile.referralCode || user.uid.slice(0, 8).toUpperCase()}
+          <div className="grid grid-cols-2 gap-4">
+            <button 
+              onClick={startCamera}
+              className="flex items-center justify-center gap-3 py-5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-bold hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-zinc-900/20 dark:shadow-white/5"
+            >
+              <Camera className="w-6 h-6" />
+              <span className="text-lg">Take Photo</span>
+            </button>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center justify-center gap-3 py-5 bg-white dark:bg-[#1c1c1e] text-zinc-900 dark:text-white rounded-2xl font-bold border border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5 transition-all active:scale-95 shadow-xl shadow-zinc-200/50 dark:shadow-black/20"
+            >
+              <ImageIcon className="w-6 h-6" />
+              <span className="text-lg">Gallery</span>
+            </button>
+          </div>
+
+          <input 
+            type="file" 
+            accept="image/*" 
+            className="hidden" 
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+          />
+        </div>
+      ) : isCameraActive ? (
+        <div className="relative rounded-[2.5rem] overflow-hidden bg-black aspect-[3/4] shadow-2xl border border-white/10">
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            className="w-full h-full object-cover"
+          />
+          
+          {/* Scanning Animation Overlay */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-1 bg-yellow-500 shadow-[0_0_30px_rgba(234,179,8,1)] animate-scan-fast z-20" />
+            <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/5 via-transparent to-yellow-500/5" />
+            
+            {/* Corner Brackets */}
+            <div className="absolute top-10 left-10 w-12 h-12 border-t-4 border-l-4 border-yellow-500 rounded-tl-2xl" />
+            <div className="absolute top-10 right-10 w-12 h-12 border-t-4 border-r-4 border-yellow-500 rounded-tr-2xl" />
+            <div className="absolute bottom-10 left-10 w-12 h-12 border-b-4 border-l-4 border-yellow-500 rounded-bl-2xl" />
+            <div className="absolute bottom-10 right-10 w-12 h-12 border-b-4 border-r-4 border-yellow-500 rounded-br-2xl" />
+            
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-black/40 backdrop-blur-md px-6 py-3 rounded-full border border-white/10">
+                <p className="text-white font-bold tracking-widest uppercase text-xs animate-pulse">Detecting Food...</p>
               </div>
+            </div>
+          </div>
+
+          <button 
+            onClick={() => stopCamera(cameraStream)}
+            className="absolute top-6 right-6 p-3 bg-black/50 hover:bg-black/80 rounded-full backdrop-blur-xl transition-colors border border-white/10 z-30"
+          >
+            <X className="w-6 h-6 text-white" />
+          </button>
+          
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
+      ) : (
+        <div className="space-y-8">
+          <div className="relative rounded-[2rem] overflow-hidden bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-white/10 shadow-2xl shadow-zinc-200/50 dark:shadow-black/50">
+            <img src={image} alt="Upload preview" className="w-full h-auto max-h-[500px] object-cover" />
+            
+            {isAnalyzing && (
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-yellow-500 shadow-[0_0_20px_rgba(234,179,8,1)] animate-scan z-10" />
+                <div className="absolute inset-0 bg-gradient-to-b from-yellow-500/10 via-transparent to-yellow-500/10" />
+              </div>
+            )}
+
+            <button 
+              onClick={() => { setImage(null); setAnalysis(null); }}
+              className="absolute top-5 right-5 p-2.5 bg-zinc-50 dark:bg-black/50 hover:bg-zinc-50 dark:bg-black/80 rounded-full backdrop-blur-xl transition-colors border border-zinc-200 dark:border-white/10"
+            >
+              <X className="w-5 h-5 text-zinc-900 dark:text-white" />
+            </button>
+          </div>
+
+          {!analysis ? (
+            <button 
+              onClick={() => handleAnalyze()}
+              disabled={loading}
+              className="w-full py-4 bg-yellow-600 text-white rounded-2xl font-semibold hover:bg-yellow-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-yellow-900/30 text-lg"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Analyze Food'}
+            </button>
+          ) : (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="p-8 rounded-[2rem] bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 space-y-6 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
+                <div className="flex items-center gap-3 text-emerald-400 mb-4 bg-emerald-500/10 w-fit px-4 py-2 rounded-full border border-emerald-500/20">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="font-semibold text-sm">Analysis Complete</span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Food Detected</p>
+                    <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.foodType}</p>
+                  </div>
+                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Category</p>
+                    <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.category}</p>
+                  </div>
+                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Rating</p>
+                    <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.healthRating}</p>
+                  </div>
+                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Score</p>
+                    <p className="font-semibold text-2xl text-yellow-500 tracking-tight">{analysis.healthScore}<span className="text-sm text-zinc-500 font-medium">/100</span></p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-zinc-200 dark:border-white/10">
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Calories</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.calories}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Protein</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.protein}g</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Carbs</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.carbs}g</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Fat</p>
+                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.fat}g</p>
+                  </div>
+                </div>
+                
+                <div className="pt-6 border-t border-zinc-200 dark:border-white/10">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-3">Health Tip</p>
+                  <p className="text-zinc-600 dark:text-zinc-300 text-sm leading-relaxed">{analysis.healthTips}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3 ml-1">Caption (Optional)</label>
+                <textarea 
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Write a caption..."
+                  className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-5 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-transparent min-h-[120px] resize-none transition-all"
+                />
+              </div>
+
               <button 
-                onClick={handleCopyReferral}
-                className="p-2 bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 rounded-lg text-zinc-900 dark:text-white transition-colors"
-                title="Copy Code"
+                onClick={handlePost}
+                disabled={loading}
+                className="w-full py-4 bg-yellow-600 text-white rounded-2xl font-semibold hover:bg-yellow-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-yellow-900/30 text-lg"
               >
-                {copySuccess ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Share Post'}
               </button>
             </div>
-            <div className="text-sm font-medium text-zinc-900 dark:text-white">
-              Total Referrals: <span className="text-emerald-500">{profile.referralsCount || 0}</span>
-            </div>
-          </div>
+          )}
+        </div>
+      )}
 
-          {/* Enter Code */}
-          <div className="border-t md:border-t-0 md:border-l border-zinc-200 dark:border-white/10 pt-6 md:pt-0 md:pl-8">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              Were you referred by a friend? Enter their code below to claim your <strong className="text-emerald-500">1,000 points</strong> bonus.
+      {/* Decline Modal */}
+      {declineModal?.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-[#1c1c1e] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-zinc-200 dark:border-white/10 animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+              <AlertCircle className="w-10 h-10 text-red-500" />
+            </div>
+            
+            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">Scan Declined</h2>
+            <p className="text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
+              {declineModal.isTimeout 
+                ? "You've reached the maximum failed attempts. Please wait 5 minutes before scanning again."
+                : "We couldn't detect any food in this image. Please scan only food items to continue."}
             </p>
-            {profile.referredBy ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="w-5 h-5" />
-                <span className="text-sm font-medium">You used code: <strong>{profile.referredBy}</strong></span>
+
+            {!declineModal.isTimeout && (
+              <div className="flex justify-center gap-2 mb-8">
+                {[1, 2, 3].map((i) => (
+                  <div 
+                    key={i}
+                    className={clsx(
+                      "w-12 h-1.5 rounded-full transition-all duration-500",
+                      i <= declineModal.attempts ? "bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]" : "bg-zinc-200 dark:bg-white/10"
+                    )}
+                  />
+                ))}
               </div>
-            ) : (
-              <div className="flex gap-2">
-                <input 
-                  type="text"
-                  value={referralInput}
-                  onChange={(e) => setReferralInput(e.target.value)}
-                  placeholder="Enter referral code"
-                  className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 uppercase font-mono"
-                />
-                <button 
-                  onClick={handleSubmitReferral}
-                  disabled={referralLoading || !referralInput.trim()}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-2"
-                >
-                  {referralLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
-                </button>
-              </div>
+            )}
+
+            <button 
+              onClick={() => {
+                setDeclineModal(null);
+                setImage(null);
+              }}
+              className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-bold hover:opacity-90 transition-all active:scale-95"
+            >
+              Try Again
+            </button>
+            
+            {!declineModal.isTimeout && (
+              <p className="mt-4 text-xs font-medium text-zinc-400 uppercase tracking-widest">
+                Attempt {declineModal.attempts} of 3
+              </p>
             )}
           </div>
         </div>
-      </div>
-
-      {/* Streak Calendar */}
-      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-white flex items-center gap-2 mb-1">
-              <CalendarIcon className="w-5 h-5 text-yellow-500" /> Check-in Streak
-            </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Check in daily to build your streak.</p>
-          </div>
-          <div className="flex items-center gap-2 bg-yellow-500/10 px-4 py-2 rounded-full border border-yellow-500/20">
-            <Flame className="w-5 h-5 text-yellow-500" />
-            <span className="font-bold text-yellow-600 dark:text-yellow-400">{profile.streak || 0} Days</span>
-          </div>
-        </div>
-
-        <div className="mb-4 text-center font-semibold text-zinc-900 dark:text-white">
-          {today.toLocaleString('default', { month: 'long', year: 'numeric' })}
-        </div>
-
-        <div className="grid grid-cols-7 gap-2 mb-2">
-          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-            <div key={day} className="text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider py-2">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-2">
-          {paddingDays.map(i => (
-            <div key={`pad-${i}`} className="aspect-square rounded-xl bg-transparent" />
-          ))}
-          {days.map((d) => (
-            <div 
-              key={d.day} 
-              className={clsx(
-                "aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all relative",
-                d.checkedIn 
-                  ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" 
-                  : d.isToday
-                    ? "bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white border-2 border-yellow-500"
-                    : d.isFuture
-                      ? "bg-zinc-50 dark:bg-white/5 text-zinc-300 dark:text-zinc-600"
-                      : "bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400"
-              )}
-            >
-              {d.checkedIn ? <CheckCircle2 className="w-5 h-5" /> : d.day}
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
