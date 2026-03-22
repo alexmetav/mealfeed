@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon, Trophy, Utensils, Menu, X, Bell } from 'lucide-react';
+import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon, Trophy, Utensils, Menu, X, Bell, Medal } from 'lucide-react';
 import clsx from 'clsx';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -25,24 +25,45 @@ export default function DashboardLayout() {
     return () => unsub();
   }, [user]);
 
-  const navItems = [
-    { name: 'Home Feed', path: '/dashboard', icon: Home },
-    { name: 'Explore', path: '/dashboard/explore', icon: Compass },
-    { name: 'Upload Food', path: '/dashboard/upload', icon: PlusSquare },
-    { name: 'Notifications', path: '/dashboard/notifications', icon: Bell, badge: unreadCount },
-    { name: 'Meal Recommendations', path: '/dashboard/recommendations', icon: Utensils, isComingSoon: true },
-    { name: 'Messages', path: '/dashboard/messages', icon: MessageSquare },
-    { name: 'Saved Posts', path: '/dashboard/saved', icon: Bookmark },
-    { name: 'Profile', path: '/dashboard/profile', icon: User },
-    { name: 'Rewards & TGE', path: '/dashboard/rewards', icon: Trophy, isHighlighted: true },
-    { name: 'Health Score', path: '/dashboard/health', icon: Activity },
-    { name: 'Health Assistant', path: '/dashboard/ai-assistant', icon: Activity },
-    { name: 'Subscription', path: '/dashboard/subscription', icon: CreditCard },
-    { name: 'Settings', path: '/dashboard/settings', icon: Settings },
+  const navSections = [
+    {
+      title: 'Main',
+      items: [
+        { name: 'Home Feed', path: '/dashboard', icon: Home },
+        { name: 'Explore', path: '/dashboard/explore', icon: Compass },
+        { name: 'Upload Food', path: '/dashboard/upload', icon: PlusSquare },
+        { name: 'Leaderboard', path: '/dashboard/leaderboard', icon: Medal },
+      ]
+    },
+    {
+      title: 'Health',
+      items: [
+        { name: 'Health Score', path: '/dashboard/health', icon: Activity },
+        { name: 'Health Assistant', path: '/dashboard/ai-assistant', icon: Activity },
+        { name: 'Meal Recommendations', path: '/dashboard/recommendations', icon: Utensils },
+      ]
+    },
+    {
+      title: 'Social',
+      items: [
+        { name: 'Notifications', path: '/dashboard/notifications', icon: Bell, badge: unreadCount },
+        { name: 'Messages', path: '/dashboard/messages', icon: MessageSquare },
+        { name: 'Saved Posts', path: '/dashboard/saved', icon: Bookmark },
+      ]
+    },
+    {
+      title: 'Account',
+      items: [
+        { name: 'Profile', path: '/dashboard/profile', icon: User },
+        { name: 'Rewards & TGE', path: '/dashboard/rewards', icon: Trophy, isHighlighted: true },
+        { name: 'Subscription', path: '/dashboard/subscription', icon: CreditCard },
+        { name: 'Settings', path: '/dashboard/settings', icon: Settings },
+      ]
+    }
   ];
 
   if (profile?.role === 'admin') {
-    navItems.push({ name: 'Admin Panel', path: '/dashboard/admin', icon: Shield });
+    navSections.find(s => s.title === 'Account')?.items.push({ name: 'Admin Panel', path: '/dashboard/admin', icon: Shield });
   }
 
   return (
@@ -72,62 +93,77 @@ export default function DashboardLayout() {
           </button>
         </div>
 
-        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto pb-4">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            
-            if (item.isComingSoon) {
-              return (
-                <div
-                  key={item.name}
-                  className="flex items-center justify-between px-4 py-3 rounded-2xl text-zinc-400 dark:text-zinc-600 cursor-not-allowed opacity-80"
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="w-5 h-5" strokeWidth={2} />
-                    {item.name}
-                  </div>
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-zinc-200 dark:bg-white/10 rounded-full">Soon</span>
-                </div>
-              );
-            }
+        <nav className="flex-1 px-4 space-y-8 overflow-y-auto pb-8">
+          {navSections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              <h3 className="px-4 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500 mb-4">
+                {section.title}
+              </h3>
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  
+                  if (item.isComingSoon) {
+                    return (
+                      <div
+                        key={item.name}
+                        className="flex items-center justify-between px-4 py-2.5 rounded-xl text-zinc-400 dark:text-zinc-600 cursor-not-allowed opacity-60"
+                      >
+                        <div className="flex items-center gap-3">
+                          <item.icon className="w-4.5 h-4.5" strokeWidth={1.5} />
+                          <span className="text-sm font-medium">{item.name}</span>
+                        </div>
+                        <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-zinc-200 dark:bg-white/5 rounded-md">Soon</span>
+                      </div>
+                    );
+                  }
 
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={clsx(
-                  'flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300',
-                  isActive 
-                    ? 'bg-yellow-600 text-white font-medium shadow-md shadow-yellow-900/20' 
-                    : item.isHighlighted
-                      ? 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 dark:text-yellow-400 font-semibold hover:bg-yellow-500/20 shadow-[0_0_15px_rgba(234,179,8,0.15)]'
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-white/5'
-                )}
-              >
-                <item.icon className={clsx("w-5 h-5", isActive ? "text-white" : item.isHighlighted ? "text-yellow-500 animate-pulse" : "text-zinc-500")} strokeWidth={isActive || item.isHighlighted ? 2.5 : 2} />
-                {item.name}
-                {item.badge ? (
-                  <span className="ml-auto flex items-center justify-center h-5 w-5 text-[10px] font-bold text-white bg-red-500 rounded-full">
-                    {item.badge > 99 ? '99+' : item.badge}
-                  </span>
-                ) : item.isHighlighted && !isActive && (
-                  <span className="ml-auto flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={clsx(
+                        'group flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 relative',
+                        isActive 
+                          ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-500 font-semibold' 
+                          : item.isHighlighted
+                            ? 'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 font-semibold hover:bg-yellow-500/10'
+                            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-white/5'
+                      )}
+                    >
+                      {isActive && (
+                        <div className="absolute left-0 w-1 h-4 bg-yellow-500 rounded-full -translate-x-1" />
+                      )}
+                      <item.icon className={clsx(
+                        "w-4.5 h-4.5 transition-colors",
+                        isActive ? "text-yellow-600 dark:text-yellow-500" : item.isHighlighted ? "text-yellow-500" : "text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white"
+                      )} strokeWidth={isActive ? 2.5 : 2} />
+                      <span className="text-sm">{item.name}</span>
+                      {item.badge ? (
+                        <span className="ml-auto flex items-center justify-center h-4.5 w-4.5 text-[9px] font-bold text-white bg-red-500 rounded-full">
+                          {item.badge > 99 ? '99+' : item.badge}
+                        </span>
+                      ) : item.isHighlighted && !isActive && (
+                        <span className="ml-auto flex h-1.5 w-1.5 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-yellow-500"></span>
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         <div className="p-4 border-t border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#0a0a0a]">
           <button
             onClick={logout}
-            className="flex items-center gap-3 px-4 py-3 w-full text-zinc-500 dark:text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all duration-300"
+            className="flex items-center gap-3 px-4 py-2.5 w-full text-zinc-500 dark:text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all duration-200 text-sm font-medium"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4.5 h-4.5" />
             Logout
           </button>
         </div>
