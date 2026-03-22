@@ -1,318 +1,359 @@
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { collection, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { UploadCloud, X, Loader2, CheckCircle2 } from 'lucide-react';
-import { GoogleGenAI, Type } from '@google/genai';
+import { Trophy, Coins, Flame, Calendar as CalendarIcon, ArrowRight, CheckCircle2, Users, Star, Copy, Loader2 } from 'lucide-react';
+import { doc, updateDoc, collection, query, where, getDocs, increment } from 'firebase/firestore';
+import { db } from '../firebase';
+import clsx from 'clsx';
 
-interface FoodAnalysisResult {
-  foodType: string;
-  category: string;
-  healthRating: 'High' | 'Medium' | 'Low';
-  healthScore: number;
-  healthTips: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-}
+import { motion, AnimatePresence } from 'framer-motion';
+import { usePoints } from '../context/PointsContext';
 
-export default function Upload() {
-  const { user, profile } = useAuth();
-  const navigate = useNavigate();
-  const [image, setImage] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState<string>('');
-  const [caption, setCaption] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [analysis, setAnalysis] = useState<FoodAnalysisResult | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+export default function Rewards() {
+  const { user, profile, refreshProfile } = useAuth();
+  const { showPoints } = usePoints();
+  const [referralInput, setReferralInput] = useState('');
+  const [referralLoading, setReferralLoading] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  if (!profile || !user) return null;
 
-    // Resize image to fit in Firestore (max 1MB, let's aim for ~100KB)
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        
-        if (ctx) {
-          // Fill with white background to prevent transparent PNG/WebP from turning black
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-        }
-        
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setImage(dataUrl);
-        setMimeType('image/jpeg');
-      };
-      img.onerror = () => {
-        alert("Failed to load image. The file might be corrupted or unsupported.");
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = () => {
-      alert("Failed to read the file.");
-    };
-    reader.readAsDataURL(file);
+  const handleCopyReferral = () => {
+    const code = profile.referralCode || user.uid.slice(0, 8).toUpperCase();
+    navigator.clipboard.writeText(code);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  const handleAnalyze = async () => {
-    if (!image) return;
-    setLoading(true);
-    
-    let retries = 2;
-    while (retries >= 0) {
-      try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const base64Data = image.split(',')[1];
-        
-        const response = await ai.models.generateContent({
-          model: "gemini-3.1-pro-preview",
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: base64Data,
-                },
-              },
-              {
-                text: "Analyze this food image. Provide the food type, category, health rating (High, Medium, Low), a health score out of 100, health tips, and estimated nutritional values (calories, protein, carbs, fat in grams). If you cannot clearly identify the food, provide your best guess or generic values.",
-              },
-            ],
-          },
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                foodType: { type: Type.STRING, description: "Name of the food" },
-                category: { type: Type.STRING, description: "Category like Breakfast, Lunch, Snack, etc." },
-                healthRating: { type: Type.STRING, description: "Must be exactly 'High', 'Medium', or 'Low'" },
-                healthScore: { type: Type.INTEGER, description: "Score from 0 to 100" },
-                healthTips: { type: Type.STRING, description: "Short health tip" },
-                calories: { type: Type.INTEGER, description: "Estimated calories" },
-                protein: { type: Type.INTEGER, description: "Estimated protein in grams" },
-                carbs: { type: Type.INTEGER, description: "Estimated carbs in grams" },
-                fat: { type: Type.INTEGER, description: "Estimated fat in grams" },
-              },
-              required: ["foodType", "category", "healthRating", "healthScore", "healthTips", "calories", "protein", "carbs", "fat"],
-            },
-          },
-        });
-
-        const resultText = response.text;
-        if (resultText) {
-          try {
-            const cleanedText = resultText.replace(/```json/gi, '').replace(/```/g, '').trim();
-            const parsedResult = JSON.parse(cleanedText) as FoodAnalysisResult;
-            setAnalysis(parsedResult);
-            break; // Success, exit loop
-          } catch (parseError) {
-            console.error("JSON Parse Error:", parseError, "Raw Text:", resultText);
-            throw new Error("Failed to parse AI response format");
-          }
-        } else {
-          throw new Error("Empty response from AI");
-        }
-      } catch (error: any) {
-        console.error(`Analysis failed (retries left: ${retries}):`, error);
-        if (retries === 0) {
-          alert(`Failed to analyze image: ${error?.message || 'Unknown error'}. Please try a different image.`);
-        }
-        retries--;
-        if (retries >= 0) {
-          await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s before retry
-        }
-      }
+  const handleSubmitReferral = async () => {
+    if (!referralInput.trim()) return;
+    if (profile.referredBy) {
+      alert('You have already used a referral code.');
+      return;
     }
-    setLoading(false);
-  };
+    const myCode = profile.referralCode || user.uid.slice(0, 8).toUpperCase();
+    if (referralInput.toUpperCase() === myCode) {
+      alert('You cannot use your own referral code.');
+      return;
+    }
 
-  const handlePost = async () => {
-    if (!user || !profile || !image || !analysis) return;
-    setLoading(true);
-
+    setReferralLoading(true);
     try {
-      const postRef = doc(collection(db, 'posts'));
-      await setDoc(postRef, {
-        userId: user.uid,
-        authorName: profile.username,
-        authorImage: profile.profileImage,
-        authorIsCreator: profile.isCreator || false,
-        imageUrl: image,
-        foodType: analysis.foodType,
-        category: analysis.category,
-        healthRating: analysis.healthRating,
-        healthScore: analysis.healthScore,
-        calories: analysis.calories,
-        protein: analysis.protein,
-        carbs: analysis.carbs,
-        fat: analysis.fat,
-        caption,
-        likesCount: 0,
-        commentsCount: 0,
-        createdAt: new Date().toISOString(),
-      });
-      
-      // Reward user with 100 points for uploading
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('referralCode', '==', referralInput.toUpperCase()));
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        alert('Invalid referral code.');
+        setReferralLoading(false);
+        return;
+      }
+
+      const referrerDoc = snapshot.docs[0];
+      const referrerId = referrerDoc.id;
+
+      // Update current user
       const userRef = doc(db, 'users', user.uid);
-      const pointsToEarn = profile.isCreator ? 200 : 100;
+      showPoints(1000, 'Referral Bonus');
       await updateDoc(userRef, {
-        points: increment(pointsToEarn),
-        postsCount: increment(1)
+        referredBy: referralInput.toUpperCase(),
+        points: increment(1000)
       });
-      
-      navigate('/dashboard');
+
+      // Update referrer
+      const referrerRef = doc(db, 'users', referrerId);
+      await updateDoc(referrerRef, {
+        referralsCount: increment(1),
+        points: increment(5000)
+      });
+
+      alert('Referral code applied! You earned 1000 points.');
+      setReferralInput('');
+      refreshProfile();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'posts');
-      setLoading(false);
+      console.error(error);
+      alert('Error applying referral code.');
+    }
+    setReferralLoading(false);
+  };
+
+  const handleClaimCreator = async () => {
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { isCreator: true });
+      alert('Congratulations! You are now a Creator. Enjoy your 2x points boost!');
+      refreshProfile();
+    } catch (error) {
+      console.error(error);
     }
   };
+
+  // Calculate estimated tokens (e.g., 1000 points = 1 $NUTRI)
+  const estimatedTokens = Math.floor((profile.points || 0) / 1000);
+  
+  // Generate calendar days for the current month
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+  
+  const checkInHistory = profile.checkInHistory || [];
+  
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const date = new Date(currentYear, currentMonth, i + 1);
+    // Format as YYYY-MM-DD in local time to match check-in logic
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    
+    return {
+      day: i + 1,
+      dateString,
+      checkedIn: checkInHistory.includes(dateString),
+      isToday: dateString === todayString,
+      isFuture: date > today
+    };
+  });
+
+  // Pad the beginning of the month
+  const paddingDays = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   return (
-    <div className="max-w-2xl mx-auto pb-24 font-sans">
-      <div className="mb-10">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-2">Upload Food</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm">Share your meal and get health insights.</p>
+    <div className="max-w-3xl mx-auto pb-24 font-sans space-y-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white mb-2">Rewards & TGE</h1>
+        <p className="text-zinc-500 dark:text-zinc-400 text-sm">Earn points and convert them to $NUTRI tokens.</p>
       </div>
 
-      {!image ? (
-        <div 
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-zinc-300 dark:border-white/20 rounded-[2rem] p-12 flex flex-col items-center justify-center text-zinc-500 hover:text-yellow-500 hover:border-yellow-500/50 hover:bg-yellow-500/5 transition-all duration-300 cursor-pointer min-h-[400px] bg-zinc-100 dark:bg-white/5 backdrop-blur-xl"
-        >
-          <div className="w-20 h-20 bg-zinc-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-6 shadow-inner shadow-white/10">
-            <UploadCloud className="w-10 h-10" />
-          </div>
-          <p className="text-xl font-medium mb-2 text-zinc-900 dark:text-white">Click to upload photo</p>
-          <p className="text-sm">JPEG, PNG up to 5MB</p>
-          <input 
-            type="file" 
-            accept="image/*" 
-            className="hidden" 
-            ref={fileInputRef}
-            onChange={handleImageUpload}
-          />
-        </div>
-      ) : (
-        <div className="space-y-8">
-          <div className="relative rounded-[2rem] overflow-hidden bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-white/10 shadow-2xl shadow-zinc-200/50 dark:shadow-black/50">
-            <img src={image} alt="Upload preview" className="w-full h-auto max-h-[500px] object-cover" />
-            <button 
-              onClick={() => { setImage(null); setAnalysis(null); }}
-              className="absolute top-5 right-5 p-2.5 bg-zinc-50 dark:bg-black/50 hover:bg-zinc-50 dark:bg-black/80 rounded-full backdrop-blur-xl transition-colors border border-zinc-200 dark:border-white/10"
-            >
-              <X className="w-5 h-5 text-zinc-900 dark:text-white" />
-            </button>
-          </div>
-
-          {!analysis ? (
-            <button 
-              onClick={handleAnalyze}
-              disabled={loading}
-              className="w-full py-4 bg-yellow-600 text-white rounded-2xl font-semibold hover:bg-yellow-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-yellow-900/30 text-lg"
-            >
-              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Analyze Food'}
-            </button>
-          ) : (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="p-8 rounded-[2rem] bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 space-y-6 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
-                <div className="flex items-center gap-3 text-emerald-400 mb-4 bg-emerald-500/10 w-fit px-4 py-2 rounded-full border border-emerald-500/20">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span className="font-semibold text-sm">Analysis Complete</span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Food Detected</p>
-                    <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.foodType}</p>
-                  </div>
-                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Category</p>
-                    <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.category}</p>
-                  </div>
-                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Rating</p>
-                    <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.healthRating}</p>
-                  </div>
-                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Score</p>
-                    <p className="font-semibold text-2xl text-yellow-500 tracking-tight">{analysis.healthScore}<span className="text-sm text-zinc-500 font-medium">/100</span></p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-zinc-200 dark:border-white/10">
-                  <div className="text-center">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Calories</p>
-                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.calories}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Protein</p>
-                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.protein}g</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Carbs</p>
-                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.carbs}g</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Fat</p>
-                    <p className="font-semibold text-zinc-900 dark:text-white">{analysis.fat}g</p>
-                  </div>
-                </div>
-                
-                <div className="pt-6 border-t border-zinc-200 dark:border-white/10">
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-3">Health Tip</p>
-                  <p className="text-zinc-600 dark:text-zinc-300 text-sm leading-relaxed">{analysis.healthTips}</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3 ml-1">Caption (Optional)</label>
-                <textarea 
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Write a caption..."
-                  className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-5 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-transparent min-h-[120px] resize-none transition-all"
-                />
-              </div>
-
-              <button 
-                onClick={handlePost}
-                disabled={loading}
-                className="w-full py-4 bg-yellow-600 text-white rounded-2xl font-semibold hover:bg-yellow-500 transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 shadow-lg shadow-yellow-900/30 text-lg"
-              >
-                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Share Post'}
-              </button>
+      {/* Points & Token Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl shadow-yellow-500/20">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-6">
+              <Trophy className="w-6 h-6 text-yellow-200" />
+              <span className="font-semibold text-yellow-100 uppercase tracking-wider text-sm">Total Points</span>
             </div>
+            <motion.div 
+              key={profile.points}
+              initial={{ scale: 1 }}
+              animate={{ scale: [1, 1.1, 1] }}
+              className="text-5xl font-bold tracking-tight mb-2"
+            >
+              {(profile.points || 0).toLocaleString()}
+            </motion.div>
+            <p className="text-yellow-200 text-sm">Keep earning by uploading and engaging!</p>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 dark:bg-[#1c1c1e] rounded-[2rem] p-8 text-white relative overflow-hidden shadow-xl">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-6">
+              <Coins className="w-6 h-6 text-emerald-400" />
+              <span className="font-semibold text-zinc-400 uppercase tracking-wider text-sm">Estimated $NUTRI</span>
+            </div>
+            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400">
+              {estimatedTokens.toLocaleString()}
+            </div>
+            <p className="text-zinc-400 text-sm flex items-center gap-1">
+              Conversion rate: 1,000 Points = 1 $NUTRI
+            </p>
+            <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <p className="text-xs text-emerald-300 leading-relaxed">
+                <strong>TGE (Token Generation Event)</strong> is scheduled for Q4 2026. Your points will automatically convert to $NUTRI tokens on the BNB Smart Chain.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* How to Earn */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
+          <ArrowRight className="w-5 h-5 text-yellow-500" /> How to Earn
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
+            <div className="font-bold text-lg text-zinc-900 dark:text-white mb-1">+1,000</div>
+            <div className="text-sm text-zinc-500 dark:text-zinc-400">Daily Check-in</div>
+          </div>
+          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
+            <div className="font-bold text-lg text-zinc-900 dark:text-white mb-1">+100</div>
+            <div className="text-sm text-zinc-500 dark:text-zinc-400">Upload a Meal</div>
+          </div>
+          <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/5">
+            <div className="font-bold text-lg text-zinc-900 dark:text-white mb-1">+50</div>
+            <div className="text-sm text-zinc-500 dark:text-zinc-400">Like a Post</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Creator Program */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-white flex items-center gap-2">
+            <Star className="w-5 h-5 text-blue-500" /> Creator Program
+          </h2>
+          {profile.isCreator && (
+            <span className="px-3 py-1 bg-blue-500/10 text-blue-500 rounded-full text-xs font-bold uppercase tracking-wider border border-blue-500/20">
+              Active (2x Boost)
+            </span>
           )}
         </div>
-      )}
+        
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
+          Become a Creator to earn 2x points on all activities! Requirements: 10 followers and 5 posts.
+        </p>
+
+        <div className="space-y-4 mb-6">
+          <div>
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-zinc-900 dark:text-white font-medium">Followers</span>
+              <span className="text-zinc-500 dark:text-zinc-400">{profile.followersCount || 0} / 10</span>
+            </div>
+            <div className="w-full bg-zinc-100 dark:bg-white/5 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-2 rounded-full transition-all duration-500" 
+                style={{ width: `${Math.min(((profile.followersCount || 0) / 10) * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-zinc-900 dark:text-white font-medium">Posts</span>
+              <span className="text-zinc-500 dark:text-zinc-400">{profile.postsCount || 0} / 5</span>
+            </div>
+            <div className="w-full bg-zinc-100 dark:bg-white/5 rounded-full h-2">
+              <div 
+                className="bg-blue-500 h-2 rounded-full transition-all duration-500" 
+                style={{ width: `${Math.min(((profile.postsCount || 0) / 5) * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {!profile.isCreator && (
+          <button 
+            onClick={handleClaimCreator}
+            disabled={(profile.followersCount || 0) < 10 || (profile.postsCount || 0) < 5}
+            className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-500 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
+          >
+            Claim Creator Badge
+          </button>
+        )}
+      </div>
+
+      {/* Refer & Earn */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
+        <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-6 flex items-center gap-2">
+          <Users className="w-5 h-5 text-emerald-500" /> Refer & Earn
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Your Code */}
+          <div>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Share your code with friends. When they sign up and use it, you earn <strong className="text-emerald-500">5,000 points</strong> and they earn 1,000 points!
+            </p>
+            <div className="bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl p-4 flex items-center justify-between mb-4">
+              <div className="font-mono text-lg font-bold text-zinc-900 dark:text-white tracking-widest">
+                {profile.referralCode || user.uid.slice(0, 8).toUpperCase()}
+              </div>
+              <button 
+                onClick={handleCopyReferral}
+                className="p-2 bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 rounded-lg text-zinc-900 dark:text-white transition-colors"
+                title="Copy Code"
+              >
+                {copySuccess ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+              </button>
+            </div>
+            <div className="text-sm font-medium text-zinc-900 dark:text-white">
+              Total Referrals: <span className="text-emerald-500">{profile.referralsCount || 0}</span>
+            </div>
+          </div>
+
+          {/* Enter Code */}
+          <div className="border-t md:border-t-0 md:border-l border-zinc-200 dark:border-white/10 pt-6 md:pt-0 md:pl-8">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Were you referred by a friend? Enter their code below to claim your <strong className="text-emerald-500">1,000 points</strong> bonus.
+            </p>
+            {profile.referredBy ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="text-sm font-medium">You used code: <strong>{profile.referredBy}</strong></span>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={referralInput}
+                  onChange={(e) => setReferralInput(e.target.value)}
+                  placeholder="Enter referral code"
+                  className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 uppercase font-mono"
+                />
+                <button 
+                  onClick={handleSubmitReferral}
+                  disabled={referralLoading || !referralInput.trim()}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {referralLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Streak Calendar */}
+      <div className="bg-white dark:bg-[#1c1c1e] rounded-[2rem] p-8 border border-zinc-200 dark:border-white/10 shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-xl font-semibold text-zinc-900 dark:text-white flex items-center gap-2 mb-1">
+              <CalendarIcon className="w-5 h-5 text-yellow-500" /> Check-in Streak
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Check in daily to build your streak.</p>
+          </div>
+          <div className="flex items-center gap-2 bg-yellow-500/10 px-4 py-2 rounded-full border border-yellow-500/20">
+            <Flame className="w-5 h-5 text-yellow-500" />
+            <span className="font-bold text-yellow-600 dark:text-yellow-400">{profile.streak || 0} Days</span>
+          </div>
+        </div>
+
+        <div className="mb-4 text-center font-semibold text-zinc-900 dark:text-white">
+          {today.toLocaleString('default', { month: 'long', year: 'numeric' })}
+        </div>
+
+        <div className="grid grid-cols-7 gap-2 mb-2">
+          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+            <div key={day} className="text-center text-xs font-semibold text-zinc-400 uppercase tracking-wider py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-2">
+          {paddingDays.map(i => (
+            <div key={`pad-${i}`} className="aspect-square rounded-xl bg-transparent" />
+          ))}
+          {days.map((d) => (
+            <div 
+              key={d.day} 
+              className={clsx(
+                "aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all relative",
+                d.checkedIn 
+                  ? "bg-yellow-500 text-white shadow-md shadow-yellow-500/20" 
+                  : d.isToday
+                    ? "bg-zinc-100 dark:bg-white/10 text-zinc-900 dark:text-white border-2 border-yellow-500"
+                    : d.isFuture
+                      ? "bg-zinc-50 dark:bg-white/5 text-zinc-300 dark:text-zinc-600"
+                      : "bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400"
+              )}
+            >
+              {d.checkedIn ? <CheckCircle2 className="w-5 h-5" /> : d.day}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
