@@ -24,9 +24,17 @@
         "failedScanCount": { "type": "number", "description": "Number of consecutive failed food scans." },
         "scanTimeoutUntil": { "type": "string", "format": "date-time", "description": "Timestamp until which the user is timed out for failed scans." },
         "spamTimeoutUntil": { "type": "string", "format": "date-time", "description": "Timestamp until which the user is timed out for spam." },
+        "followersCount": { "type": "number" },
+        "followingCount": { "type": "number" },
+        "postsCount": { "type": "number" },
+        "referralsCount": { "type": "number" },
+        "isCreator": { "type": "boolean" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "checkInHistory": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "email", "username", "subscriptionPlan", "role", "createdAt", "points", "streak"]
+      "required": ["uid", "email", "username", "profileImage", "subscriptionPlan", "healthScore", "role", "createdAt", "points", "streak", "dailyLikesCount", "dailyCommentsCount", "dailyPostsCount"]
     },
     "ActivityLog": {
       "title": "ActivityLog",
