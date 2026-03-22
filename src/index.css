@@ -17,3 +17,21 @@
     @apply bg-black text-white;
   }
 }
+
+@keyframes scan {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+@keyframes scan-fast {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+.animate-scan {
+  animation: scan 2s ease-in-out infinite alternate;
+}
+
+.animate-scan-fast {
+  animation: scan-fast 1.5s ease-in-out infinite alternate;
+}
