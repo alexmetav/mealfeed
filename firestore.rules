@@ -168,7 +168,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId) && uidUnchanged() && (request.resource.data.role == 'user' || isAdmin());
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId) && uidNotModified() && (request.resource.data.role == resource.data.role || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && uidNotModified() && (request.resource.data.role == resource.data.role || isAdmin())) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'followersCount', 'followingCount', 'postsCount', 'referralsCount']))
+      );
       allow delete: if isAdmin();
     }
 
