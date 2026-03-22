@@ -1,48 +1,89 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Users, Image as ImageIcon, CreditCard, ShieldAlert } from 'lucide-react';
+import { Users, Image as ImageIcon, CreditCard, ShieldAlert, MessageSquare, Trash2, X, Send, CheckCircle2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
+import clsx from 'clsx';
 
 export default function Admin() {
-  const { profile } = useAuth();
+  const { profile, user: adminUser } = useAuth();
   const [stats, setStats] = useState({ users: 0, posts: 0, revenue: 0 });
   const [recentPosts, setRecentPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [messageModal, setMessageModal] = useState<{ show: boolean; userId: string; userName: string } | null>(null);
+  const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const fetchAdminData = async () => {
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(20)));
+      
+      let revenue = 0;
+      usersSnap.docs.forEach(doc => {
+        const plan = doc.data().subscriptionPlan;
+        if (plan === 'premium') revenue += 49;
+        if (plan === 'pro') revenue += 99;
+      });
+
+      setStats({
+        users: usersSnap.size,
+        posts: postsSnap.size,
+        revenue
+      });
+
+      setRecentPosts(postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'admin');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (profile?.role !== 'admin') return;
-
-    const fetchAdminData = async () => {
-      try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(10)));
-        
-        let revenue = 0;
-        usersSnap.docs.forEach(doc => {
-          const plan = doc.data().subscriptionPlan;
-          if (plan === 'premium') revenue += 49;
-          if (plan === 'pro') revenue += 99;
-        });
-
-        setStats({
-          users: usersSnap.size,
-          posts: postsSnap.size, // This is just the recent 10, but good enough for mock
-          revenue
-        });
-
-        setRecentPosts(postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.LIST, 'admin');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAdminData();
   }, [profile]);
+
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) return;
+    try {
+      await deleteDoc(doc(db, 'posts', postId));
+      setRecentPosts(prev => prev.filter(p => p.id !== postId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageModal || !messageText.trim() || !adminUser) return;
+    setSending(true);
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        userId: messageModal.userId,
+        actorId: adminUser.uid,
+        actorName: 'MealFeed Admin',
+        actorImage: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
+        type: 'admin_message',
+        message: messageText,
+        read: false,
+        createdAt: new Date().toISOString()
+      });
+      setSuccess(true);
+      setTimeout(() => {
+        setMessageModal(null);
+        setSuccess(false);
+        setMessageText('');
+      }, 2000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'notifications');
+    } finally {
+      setSending(false);
+    }
+  };
 
   if (profile?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
@@ -104,7 +145,22 @@ export default function Admin() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors">Delete</button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => setMessageModal({ show: true, userId: post.userId, userName: post.authorName })}
+                        className="p-2 text-zinc-400 hover:text-yellow-500 hover:bg-yellow-500/10 rounded-lg transition-colors"
+                        title="Send Message"
+                      >
+                        <MessageSquare className="w-5 h-5" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeletePost(post.id)}
+                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Delete Post"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -112,6 +168,65 @@ export default function Admin() {
           </table>
         </div>
       </div>
+
+      {/* Message Modal */}
+      {messageModal?.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-[#1c1c1e] w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl border border-zinc-200 dark:border-white/10 animate-in zoom-in-95 duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-zinc-900 dark:text-white">Send Message</h2>
+              <button onClick={() => setMessageModal(null)} className="p-2 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-full transition-colors">
+                <X className="w-6 h-6 text-zinc-500" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">Recipient</p>
+              <div className="flex items-center gap-3 p-3 bg-zinc-100 dark:bg-white/5 rounded-2xl border border-zinc-200 dark:border-white/10">
+                <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center text-yellow-500 font-bold">
+                  {messageModal.userName[0]}
+                </div>
+                <span className="font-semibold text-zinc-900 dark:text-white">{messageModal.userName}</span>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <label className="block text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-2">Message Content</label>
+              <textarea 
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                placeholder="Type your message here..."
+                className="w-full bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 min-h-[150px] resize-none transition-all"
+              />
+            </div>
+
+            <button 
+              onClick={handleSendMessage}
+              disabled={sending || !messageText.trim() || success}
+              className={clsx(
+                "w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 shadow-lg active:scale-95",
+                success 
+                  ? "bg-emerald-500 text-white shadow-emerald-500/20" 
+                  : "bg-yellow-600 text-white hover:bg-yellow-500 shadow-yellow-900/20"
+              )}
+            >
+              {sending ? (
+                <LoadingSpinner />
+              ) : success ? (
+                <>
+                  <CheckCircle2 className="w-6 h-6" />
+                  Sent Successfully
+                </>
+              ) : (
+                <>
+                  <Send className="w-5 h-5" />
+                  Send Notification
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
