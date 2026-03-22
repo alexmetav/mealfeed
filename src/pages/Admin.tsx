@@ -94,8 +94,8 @@ export default function Admin() {
       await addDoc(collection(db, 'notifications'), {
         userId: messageModal.userId,
         actorId: adminUser.uid,
-        actorName: 'MealFeed Admin',
-        actorImage: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
+        actorName: 'MealFeed',
+        actorImage: 'https://api.dicebear.com/7.x/bottts/svg?seed=mealfeed',
         type: 'admin_message',
         message: messageText,
         read: false,
@@ -123,8 +123,8 @@ export default function Admin() {
         return addDoc(collection(db, 'notifications'), {
           userId: userDoc.id,
           actorId: adminUser.uid,
-          actorName: 'MealFeed Admin',
-          actorImage: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
+          actorName: 'MealFeed',
+          actorImage: 'https://api.dicebear.com/7.x/bottts/svg?seed=mealfeed',
           type: 'admin_message',
           message: broadcastText,
           read: false,
