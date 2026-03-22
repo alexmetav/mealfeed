@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Bot, Sparkles, Loader2, Send, User as UserIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { openAIChat } from '../services/openaiService';
+import { aiChat } from '../services/aiService';
 
 const FAQS = [
   "Analyze my recent meals and give me a weekly summary.",
@@ -104,7 +104,7 @@ Guidelines:
     setLoading(true);
 
     try {
-      const response = await openAIChat(
+      const response = await aiChat(
         newMessages.map(m => ({ role: m.role, content: m.content })),
         systemInstruction
       );
@@ -115,10 +115,7 @@ Guidelines:
       console.error(error);
       let errorMsg = "Sorry, I encountered an error communicating with the AI. Please try again.";
       if (error.message?.toLowerCase().includes('quota') || error.message?.includes('429')) {
-        errorMsg = "AI Quota Exceeded. Please wait a minute or check your OpenAI billing settings.";
-      }
-      if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
-        errorMsg = "Insufficient Balance. Please top up your OpenAI account.";
+        errorMsg = "AI Quota Exceeded. Please wait a minute.";
       }
       setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }]);
     } finally {
