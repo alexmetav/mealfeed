@@ -39,7 +39,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'username', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'lastActionDate', 'checkInHistory', 'isCreator', 'referralCode', 'referredBy', 'referralsCount', 'followersCount', 'followingCount', 'postsCount']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'username', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'dailyPostsCount', 'lastActionDate', 'checkInHistory', 'isCreator', 'referralCode', 'referredBy', 'referralsCount', 'followersCount', 'followingCount', 'postsCount', 'spamTimeoutUntil', 'failedScanCount', 'scanTimeoutUntil']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
              data.email is string && isValidEmail(data.email) &&
              data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
@@ -54,6 +54,7 @@ service cloud.firestore {
              (!('lastCheckIn' in data) || data.lastCheckIn is string) &&
              (!('dailyLikesCount' in data) || data.dailyLikesCount is number) &&
              (!('dailyCommentsCount' in data) || data.dailyCommentsCount is number) &&
+             (!('dailyPostsCount' in data) || data.dailyPostsCount is number) &&
              (!('lastActionDate' in data) || data.lastActionDate is string) &&
              (!('checkInHistory' in data) || data.checkInHistory is list) &&
              (!('isCreator' in data) || data.isCreator is bool) &&
@@ -63,7 +64,17 @@ service cloud.firestore {
              (!('followersCount' in data) || data.followersCount is number) &&
              (!('followingCount' in data) || data.followingCount is number) &&
              (!('postsCount' in data) || data.postsCount is number) &&
+             (!('spamTimeoutUntil' in data) || data.spamTimeoutUntil is string) &&
+             (!('failedScanCount' in data) || data.failedScanCount is number) &&
+             (!('scanTimeoutUntil' in data) || data.scanTimeoutUntil is string) &&
              data.createdAt is string; // ISO string
+    }
+
+    function isValidActivityLog(data) {
+      return hasOnlyAllowedFields(['userId', 'type', 'timestamp']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.type in ['post', 'comment'] &&
+             data.timestamp is timestamp;
     }
 
     function isValidPost(data) {
@@ -94,6 +105,13 @@ service cloud.firestore {
              data.createdAt is string;
     }
 
+    function isValidSavedPost(data) {
+      return hasOnlyAllowedFields(['userId', 'postId', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.postId is string && data.postId.size() > 0 && data.postId.size() < 100 &&
+             data.createdAt is string;
+    }
+
     function isValidComment(data) {
       return hasOnlyAllowedFields(['postId', 'userId', 'authorName', 'text', 'createdAt']) &&
              data.postId is string && data.postId.size() > 0 && data.postId.size() < 100 &&
@@ -115,15 +133,33 @@ service cloud.firestore {
     }
 
     function isValidNotification(data) {
-      return hasOnlyAllowedFields(['userId', 'actorId', 'actorName', 'actorImage', 'type', 'postId', 'read', 'createdAt']) &&
+      return hasOnlyAllowedFields(['userId', 'actorId', 'actorName', 'actorImage', 'type', 'postId', 'read', 'createdAt', 'link', 'message']) &&
              data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
              data.actorId is string && data.actorId.size() > 0 && data.actorId.size() < 100 &&
              data.actorName is string && data.actorName.size() > 0 && data.actorName.size() < 50 &&
              (!('actorImage' in data) || (data.actorImage is string && data.actorImage.size() < 1000000)) &&
-             data.type in ['like', 'comment', 'follow'] &&
+             data.type in ['like', 'comment', 'follow', 'message', 'admin_message'] &&
              (!('postId' in data) || (data.postId is string && data.postId.size() < 100)) &&
+             (!('message' in data) || (data.message is string && data.message.size() < 5000)) &&
+             (!('link' in data) || (data.link is string && data.link.size() < 1000)) &&
              data.read is bool &&
              data.createdAt is string;
+    }
+
+    function isValidChat(data) {
+      return hasOnlyAllowedFields(['users', 'lastMessage', 'lastMessageTime', 'userDetails']) &&
+             data.users is list && data.users.size() == 2 &&
+             data.users.hasAll([request.auth.uid]) &&
+             data.lastMessage is string &&
+             (data.lastMessageTime is timestamp || data.lastMessageTime == null) &&
+             data.userDetails is map;
+    }
+
+    function isValidMessage(data) {
+      return hasOnlyAllowedFields(['senderId', 'text', 'createdAt']) &&
+             data.senderId is string && data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
+             data.createdAt is timestamp;
     }
 
     // ===============================================================
@@ -151,6 +187,12 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
+    match /saved_posts/{saveId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidSavedPost(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
     match /comments/{commentId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidComment(request.resource.data) && request.resource.data.userId == request.auth.uid;
@@ -169,6 +211,22 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidNotification(request.resource.data) && request.resource.data.actorId == request.auth.uid;
       allow update: if isAuthenticated() && isValidNotification(request.resource.data) && request.resource.data.userId == request.auth.uid && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidActivityLog(request.resource.data);
+    }
+
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && request.auth.uid in resource.data.users;
+      allow create: if isAuthenticated() && isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.users && isValidChat(request.resource.data);
+      
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.users;
+        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.users && isValidMessage(request.resource.data);
+      }
     }
   }
 }
