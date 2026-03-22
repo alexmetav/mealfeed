@@ -275,12 +275,7 @@ export default function UserProfile() {
                   </button>
                   <button
                     onClick={() => {
-                      const isPremium = currentUserProfile?.subscriptionPlan === 'premium' || currentUserProfile?.subscriptionPlan === 'pro';
-                      if (isPremium) {
-                        navigate(`/dashboard/messages?to=${profile.id}`);
-                      } else {
-                        navigate('/dashboard/subscription');
-                      }
+                      navigate(`/dashboard/messages?to=${profile.id}`);
                     }}
                     className="px-6 py-2 rounded-full text-sm font-bold transition-all duration-300 shadow-lg bg-blue-600 text-white hover:bg-blue-500 shadow-blue-900/20"
                   >
