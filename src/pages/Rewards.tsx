@@ -5,8 +5,12 @@ import { doc, updateDoc, collection, query, where, getDocs, increment } from 'fi
 import { db } from '../firebase';
 import clsx from 'clsx';
 
+import { motion, AnimatePresence } from 'framer-motion';
+import { usePoints } from '../context/PointsContext';
+
 export default function Rewards() {
   const { user, profile, refreshProfile } = useAuth();
+  const { showPoints } = usePoints();
   const [referralInput, setReferralInput] = useState('');
   const [referralLoading, setReferralLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -49,6 +53,7 @@ export default function Rewards() {
 
       // Update current user
       const userRef = doc(db, 'users', user.uid);
+      showPoints(1000, 'Referral Bonus');
       await updateDoc(userRef, {
         referredBy: referralInput.toUpperCase(),
         points: increment(1000)
@@ -128,9 +133,14 @@ export default function Rewards() {
               <Trophy className="w-6 h-6 text-yellow-200" />
               <span className="font-semibold text-yellow-100 uppercase tracking-wider text-sm">Total Points</span>
             </div>
-            <div className="text-5xl font-bold tracking-tight mb-2">
+            <motion.div 
+              key={profile.points}
+              initial={{ scale: 1 }}
+              animate={{ scale: [1, 1.1, 1] }}
+              className="text-5xl font-bold tracking-tight mb-2"
+            >
               {(profile.points || 0).toLocaleString()}
-            </div>
+            </motion.div>
             <p className="text-yellow-200 text-sm">Keep earning by uploading and engaging!</p>
           </div>
         </div>
@@ -142,12 +152,17 @@ export default function Rewards() {
               <Coins className="w-6 h-6 text-emerald-400" />
               <span className="font-semibold text-zinc-400 uppercase tracking-wider text-sm">Estimated $NUTRI</span>
             </div>
-            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400 blur-sm select-none">
-              ???
+            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400">
+              {estimatedTokens.toLocaleString()}
             </div>
             <p className="text-zinc-400 text-sm flex items-center gap-1">
-              Conversion rate is a mystery. Revealed on TGE.
+              Conversion rate: 1,000 Points = 1 $NUTRI
             </p>
+            <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+              <p className="text-xs text-emerald-300 leading-relaxed">
+                <strong>TGE (Token Generation Event)</strong> is scheduled for Q4 2026. Your points will automatically convert to $NUTRI tokens on the BNB Smart Chain.
+              </p>
+            </div>
           </div>
         </div>
       </div>
