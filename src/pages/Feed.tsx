@@ -9,7 +9,6 @@ import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
 import CommentsModal from '../components/CommentsModal';
 import PostCard from '../components/PostCard';
-import { aiVision } from '../services/aiService';
 
 interface Post {
   id: string;
