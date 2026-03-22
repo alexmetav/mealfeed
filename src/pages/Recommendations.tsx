@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Utensils, Globe, Target, ShoppingCart, Activity, Flame, ChevronRight, Loader2, Candy, Pizza } from 'lucide-react';
-import { openAIJson } from '../services/openaiService';
+import { aiJson } from '../services/aiService';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -101,7 +101,7 @@ export default function Recommendations() {
         ]
       }`;
 
-      const response = await openAIJson(prompt);
+      const response = await aiJson(prompt);
       
       if (response) {
         let cleanedResponse = response.trim();
