@@ -19,10 +19,25 @@
         "lastCheckIn": { "type": "string", "format": "date-time", "description": "Timestamp of the last daily check-in." },
         "dailyLikesCount": { "type": "number", "description": "Number of likes given today." },
         "dailyCommentsCount": { "type": "number", "description": "Number of comments given today." },
+        "dailyPostsCount": { "type": "number", "description": "Number of posts uploaded today." },
         "lastActionDate": { "type": "string", "description": "The date (YYYY-MM-DD) of the last recorded action to reset daily limits." },
+        "failedScanCount": { "type": "number", "description": "Number of consecutive failed food scans." },
+        "scanTimeoutUntil": { "type": "string", "format": "date-time", "description": "Timestamp until which the user is timed out for failed scans." },
+        "spamTimeoutUntil": { "type": "string", "format": "date-time", "description": "Timestamp until which the user is timed out for spam." },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "username", "subscriptionPlan", "role", "createdAt", "points", "streak"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Log of user actions for spam detection.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["post", "comment"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "type", "timestamp"]
     },
     "Post": {
       "title": "Post",
@@ -47,6 +62,17 @@
     "Like": {
       "title": "Like",
       "description": "A like on a post.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "postId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "postId", "createdAt"]
+    },
+    "SavedPost": {
+      "title": "SavedPost",
+      "description": "A post saved by a user.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -92,12 +118,36 @@
         "actorId": { "type": "string", "description": "The ID of the user who performed the action." },
         "actorName": { "type": "string", "description": "The name of the user who performed the action." },
         "actorImage": { "type": "string", "description": "The profile image of the actor." },
-        "type": { "type": "string", "enum": ["like", "comment", "follow"], "description": "The type of notification." },
+        "type": { "type": "string", "enum": ["like", "comment", "follow", "message", "admin_message"], "description": "The type of notification." },
         "postId": { "type": "string", "description": "The ID of the post, if applicable." },
+        "message": { "type": "string", "description": "The content of the admin message." },
         "read": { "type": "boolean", "description": "Whether the notification has been read." },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "actorId", "actorName", "type", "read", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "A direct message conversation between two users.",
+      "type": "object",
+      "properties": {
+        "users": { "type": "array", "items": { "type": "string" }, "description": "The IDs of the users in the chat." },
+        "lastMessage": { "type": "string", "description": "The text of the last message sent." },
+        "lastMessageTime": { "type": "string", "format": "date-time", "description": "When the last message was sent." },
+        "userDetails": { "type": "object", "description": "Cached details of the users in the chat." }
+      },
+      "required": ["users", "lastMessage", "lastMessageTime", "userDetails"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A single message within a chat.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "description": "The ID of the user who sent the message." },
+        "text": { "type": "string", "description": "The text of the message." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "text", "createdAt"]
     }
   },
   "firestore": {
@@ -113,6 +163,10 @@
       "schema": { "$ref": "#/entities/Like" },
       "description": "Stores post likes."
     },
+    "/saved_posts/{saveId}": {
+      "schema": { "$ref": "#/entities/SavedPost" },
+      "description": "Stores saved posts."
+    },
     "/comments/{commentId}": {
       "schema": { "$ref": "#/entities/Comment" },
       "description": "Stores post comments."
@@ -124,6 +178,18 @@
     "/notifications/{notificationId}": {
       "schema": { "$ref": "#/entities/Notification" },
       "description": "Stores user notifications."
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Stores activity logs for spam detection."
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/Chat" },
+      "description": "Stores direct message conversations."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Stores messages within a chat."
     }
   }
 }
