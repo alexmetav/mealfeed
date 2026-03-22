@@ -18,6 +18,8 @@ interface Chat {
   lastMessage: string;
   lastMessageTime: any;
   userDetails: Record<string, ChatUser>;
+  status?: 'pending' | 'accepted';
+  createdBy?: string;
 }
 
 interface Message {
@@ -46,19 +48,24 @@ export default function Messages() {
   }, [messages]);
 
   useEffect(() => {
-    if (!user || (profile?.subscriptionPlan === 'free' && profile?.role !== 'admin')) {
+    if (!user) {
       setLoadingChats(false);
       return;
     }
 
     const q = query(
       collection(db, 'chats'),
-      where('users', 'array-contains', user.uid),
-      orderBy('lastMessageTime', 'desc')
+      where('users', 'array-contains', user.uid)
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const fetchedChats = snap.docs.map(d => ({ id: d.id, ...d.data() } as Chat));
+      const fetchedChats = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Chat))
+        .sort((a, b) => {
+          const timeA = a.lastMessageTime?.toMillis?.() || 0;
+          const timeB = b.lastMessageTime?.toMillis?.() || 0;
+          return timeB - timeA;
+        });
       setChats(fetchedChats);
       setLoadingChats(false);
 
@@ -77,6 +84,8 @@ export default function Messages() {
                 users: [user.uid, toUserId],
                 lastMessage: '',
                 lastMessageTime: null,
+                status: (profile?.subscriptionPlan === 'premium' || profile?.subscriptionPlan === 'pro' || profile?.role === 'admin') ? 'accepted' : 'pending',
+                createdBy: user.uid,
                 userDetails: {
                   [user.uid]: { id: user.uid, name: profile?.username || 'User', image: profile?.profileImage || '' },
                   [toUserId]: { id: toUserId, name: targetData.username || 'User', image: targetData.profileImage || '' }
@@ -121,19 +130,32 @@ export default function Messages() {
     try {
       const chatRef = doc(db, 'chats', activeChat.id);
       const chatDoc = await getDoc(chatRef);
+      const isPremium = profile?.subscriptionPlan === 'premium' || profile?.subscriptionPlan === 'pro' || profile?.role === 'admin';
 
       if (!chatDoc.exists()) {
         await setDoc(chatRef, {
           users: activeChat.users,
           userDetails: activeChat.userDetails,
           lastMessage: newMessage,
-          lastMessageTime: serverTimestamp()
+          lastMessageTime: serverTimestamp(),
+          status: isPremium ? 'accepted' : 'pending',
+          createdBy: user.uid
         });
       } else {
-        await setDoc(chatRef, {
+        const chatData = chatDoc.data();
+        const updates: any = {
           lastMessage: newMessage,
           lastMessageTime: serverTimestamp()
-        }, { merge: true });
+        };
+
+        // If it was pending and a premium user sends a message, or if the recipient of the request replies
+        if (chatData.status === 'pending') {
+          if (isPremium || chatData.createdBy !== user.uid) {
+            updates.status = 'accepted';
+          }
+        }
+
+        await setDoc(chatRef, updates, { merge: true });
       }
 
       await addDoc(collection(db, `chats/${activeChat.id}/messages`), {
@@ -165,25 +187,8 @@ export default function Messages() {
     }
   };
 
-  if (profile?.subscriptionPlan === 'free' && profile?.role !== 'admin') {
-    return (
-      <div className="max-w-2xl mx-auto py-24 text-center space-y-8 font-sans">
-        <div className="w-24 h-24 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner shadow-white/5">
-          <Lock className="w-10 h-10" />
-        </div>
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-white">Direct Messaging</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto text-lg leading-relaxed">
-          Direct messaging is a Premium feature. Upgrade your account to connect directly with other foodies!
-        </p>
-        <button 
-          onClick={() => navigate('/dashboard/subscription')}
-          className="px-10 py-4 bg-yellow-600 text-white font-semibold rounded-full hover:bg-yellow-500 transition-all duration-300 shadow-lg shadow-yellow-900/30 text-lg"
-        >
-          Upgrade to Premium
-        </button>
-      </div>
-    );
-  }
+  const inboxChats = chats.filter(c => c.status === 'accepted' || !c.status);
+  const requestChats = chats.filter(c => c.status === 'pending');
 
   return (
     <div className="max-w-5xl mx-auto h-[calc(100vh-8rem)] flex bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 rounded-[2rem] overflow-hidden shadow-2xl shadow-zinc-200/50 dark:shadow-black/50 font-sans">
@@ -195,15 +200,94 @@ export default function Messages() {
             <MessageSquare className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
           {loadingChats ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-yellow-500" />
             </div>
-          ) : chats.length === 0 && !toUserId ? (
-            <p className="text-center text-zinc-500 dark:text-zinc-400 py-8 text-sm">No messages yet.</p>
           ) : (
             <>
+              {/* Inbox Section */}
+              {inboxChats.length > 0 && (
+                <div className="space-y-1">
+                  <p className="px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Inbox</p>
+                  {inboxChats.map(chat => {
+                    const otherUserId = chat.users.find(id => id !== user?.uid) || chat.users[0];
+                    const otherUser = chat.userDetails[otherUserId];
+                    const isActive = activeChat?.id === chat.id;
+                    
+                    return (
+                      <div 
+                        key={chat.id}
+                        onClick={() => { setActiveChat(chat); navigate('/dashboard/messages'); }}
+                        className={clsx(
+                          "p-4 rounded-2xl cursor-pointer flex items-center gap-4 transition-colors group",
+                          isActive ? "bg-zinc-200 dark:bg-white/10" : "hover:bg-zinc-100 dark:hover:bg-white/5"
+                        )}
+                      >
+                        <img 
+                          src={otherUser?.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUserId}`} 
+                          alt={otherUser?.name} 
+                          className="w-12 h-12 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0 bg-zinc-100 dark:bg-[#1c1c1e]" 
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-semibold text-zinc-900 dark:text-white truncate">{otherUser?.name || 'User'}</p>
+                          </div>
+                          <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate group-hover:text-zinc-600 dark:text-zinc-300 transition-colors">
+                            {chat.lastMessage || 'Start a conversation'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Requests Section */}
+              {requestChats.length > 0 && (
+                <div className="space-y-1">
+                  <p className="px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Requests</p>
+                  {requestChats.map(chat => {
+                    const otherUserId = chat.users.find(id => id !== user?.uid) || chat.users[0];
+                    const otherUser = chat.userDetails[otherUserId];
+                    const isActive = activeChat?.id === chat.id;
+                    
+                    return (
+                      <div 
+                        key={chat.id}
+                        onClick={() => { setActiveChat(chat); navigate('/dashboard/messages'); }}
+                        className={clsx(
+                          "p-4 rounded-2xl cursor-pointer flex items-center gap-4 transition-colors group",
+                          isActive ? "bg-zinc-200 dark:bg-white/10" : "hover:bg-zinc-100 dark:hover:bg-white/5"
+                        )}
+                      >
+                        <div className="relative">
+                          <img 
+                            src={otherUser?.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUserId}`} 
+                            alt={otherUser?.name} 
+                            className="w-12 h-12 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0 bg-zinc-100 dark:bg-[#1c1c1e]" 
+                          />
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full border-2 border-white dark:border-zinc-900" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-semibold text-zinc-900 dark:text-white truncate">{otherUser?.name || 'User'}</p>
+                          </div>
+                          <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate group-hover:text-zinc-600 dark:text-zinc-300 transition-colors">
+                            {chat.lastMessage || 'Message request'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {chats.length === 0 && !toUserId && (
+                <p className="text-center text-zinc-500 dark:text-zinc-400 py-8 text-sm">No messages yet.</p>
+              )}
+
               {activeChat && !chats.find(c => c.id === activeChat.id) && (
                 <div className="p-4 rounded-2xl bg-zinc-200 dark:bg-white/10 cursor-pointer flex items-center gap-4 transition-colors group">
                   <img 
@@ -217,36 +301,6 @@ export default function Messages() {
                   </div>
                 </div>
               )}
-              {chats.map(chat => {
-                const otherUserId = chat.users.find(id => id !== user?.uid) || chat.users[0];
-                const otherUser = chat.userDetails[otherUserId];
-                const isActive = activeChat?.id === chat.id;
-                
-                return (
-                  <div 
-                    key={chat.id}
-                    onClick={() => { setActiveChat(chat); navigate('/dashboard/messages'); }}
-                    className={clsx(
-                      "p-4 rounded-2xl cursor-pointer flex items-center gap-4 transition-colors group",
-                      isActive ? "bg-zinc-200 dark:bg-white/10" : "hover:bg-zinc-100 dark:hover:bg-white/5"
-                    )}
-                  >
-                    <img 
-                      src={otherUser?.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUserId}`} 
-                      alt={otherUser?.name} 
-                      className="w-12 h-12 rounded-full border border-zinc-200 dark:border-white/10 flex-shrink-0 bg-zinc-100 dark:bg-[#1c1c1e]" 
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="font-semibold text-zinc-900 dark:text-white truncate">{otherUser?.name || 'User'}</p>
-                      </div>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400 truncate group-hover:text-zinc-600 dark:text-zinc-300 transition-colors">
-                        {chat.lastMessage || 'Start a conversation'}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
             </>
           )}
         </div>
@@ -273,6 +327,14 @@ export default function Messages() {
                 {activeChat.userDetails[activeChat.users.find(id => id !== user?.uid) || activeChat.users[0]]?.name || 'User'}
               </h2>
             </div>
+            
+            {activeChat.status === 'pending' && activeChat.createdBy !== user?.uid && (
+              <div className="p-4 bg-yellow-500/10 border-b border-yellow-500/20 text-center">
+                <p className="text-sm text-yellow-600 dark:text-yellow-400 font-medium">
+                  This is a message request. Replying will accept the request.
+                </p>
+              </div>
+            )}
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.map((msg) => {
