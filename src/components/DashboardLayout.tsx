@@ -63,7 +63,13 @@ export default function DashboardLayout() {
   ];
 
   if (profile?.role === 'admin') {
-    navSections.find(s => s.title === 'Account')?.items.push({ name: 'Admin Panel', path: '/dashboard/admin', icon: Shield });
+    navSections.push({
+      title: 'Admin',
+      items: [
+        { name: 'Admin Panel', path: '/dashboard/admin', icon: Shield },
+        { name: 'User Analytics', path: '/dashboard/admin/users', icon: Activity },
+      ]
+    });
   }
 
   return (
