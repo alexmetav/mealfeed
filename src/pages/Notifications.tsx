@@ -30,12 +30,14 @@ export default function Notifications() {
     
     const q = query(
       collection(db, 'notifications'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', user.uid)
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
+      const fetchedNotifications = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+      // Sort in memory to avoid composite index requirement
+      fetchedNotifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setNotifications(fetchedNotifications);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'notifications');
