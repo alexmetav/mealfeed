@@ -67,7 +67,6 @@ export default function DashboardLayout() {
       title: 'Admin',
       items: [
         { name: 'Admin Panel', path: '/dashboard/admin', icon: Shield },
-        { name: 'User Analytics', path: '/dashboard/admin/users', icon: Activity },
       ]
     });
   }
