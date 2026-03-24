@@ -30,6 +30,13 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 import { PointsProvider } from './context/PointsContext';
 
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { profile, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (profile?.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -57,7 +64,11 @@ export default function App() {
                   <Route path="rewards" element={<Rewards />} />
                   <Route path="leaderboard" element={<Leaderboard />} />
                   <Route path="ai-assistant" element={<AIAssistant />} />
-                  <Route path="admin" element={<Admin />} />
+                  <Route path="admin" element={
+                    <AdminRoute>
+                      <Admin />
+                    </AdminRoute>
+                  } />
                   <Route path="messages" element={<Messages />} />
                   <Route path="subscription" element={<Subscription />} />
                   <Route path="notifications" element={<Notifications />} />
