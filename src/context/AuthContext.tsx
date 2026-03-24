@@ -120,12 +120,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setProfile(newProfile);
           }
         } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
+          console.error("Error fetching user profile:", error);
+          // Don't throw the error here, just log it, so the app can still load
+          // handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
+        } finally {
+          setLoading(false);
         }
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
