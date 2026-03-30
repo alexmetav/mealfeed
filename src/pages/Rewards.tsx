@@ -152,15 +152,15 @@ export default function Rewards() {
               <Coins className="w-6 h-6 text-emerald-400" />
               <span className="font-semibold text-zinc-400 uppercase tracking-wider text-sm">Estimated $NUTRI</span>
             </div>
-            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400">
+            <div className="text-5xl font-bold tracking-tight mb-2 text-emerald-400 blur-xl select-none">
               {estimatedTokens.toLocaleString()}
             </div>
             <p className="text-zinc-400 text-sm flex items-center gap-1">
-              Conversion rate: 1,000 Points = 1 $NUTRI
+              Conversion rate: <span className="blur-md select-none">??? Points = 1 $NUTRI</span>
             </p>
             <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <p className="text-xs text-emerald-300 leading-relaxed">
-                <strong>TGE (Token Generation Event)</strong> is scheduled for Q4 2026. Your points will automatically convert to $NUTRI tokens on the BNB Smart Chain.
+                <strong>TGE (Token Generation Event)</strong> is approaching. Your points will automatically convert to $NUTRI tokens on the BNB Smart Chain after TGE.
               </p>
             </div>
           </div>

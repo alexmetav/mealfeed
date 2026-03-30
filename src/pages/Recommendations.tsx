@@ -21,7 +21,7 @@ interface UserPost {
 }
 
 export default function Recommendations() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [goal, setGoal] = useState('Weight Loss');
   const [healthLevel, setHealthLevel] = useState('Very Healthy');
   const [recType, setRecType] = useState('Healthy Lifestyle');
@@ -30,9 +30,11 @@ export default function Recommendations() {
   const [recommendations, setRecommendations] = useState<MealRecommendation[]>([]);
   const [userPosts, setUserPosts] = useState<UserPost[]>([]);
 
+  const isSubscribed = profile?.subscriptionPlan === 'pro' || profile?.subscriptionPlan === 'premium';
+
   useEffect(() => {
     const fetchUserPosts = async () => {
-      if (!user) return;
+      if (!user || !isSubscribed) return;
       try {
         const q = query(
           collection(db, 'posts'),
@@ -134,6 +136,28 @@ export default function Recommendations() {
       setLoading(false);
     }
   };
+
+  if (!isSubscribed) {
+    return (
+      <div className="max-w-4xl mx-auto pb-24 flex flex-col items-center justify-center text-center space-y-8 py-20">
+        <div className="w-24 h-24 bg-orange-500/10 rounded-full flex items-center justify-center border border-orange-500/20 shadow-xl shadow-orange-500/10">
+          <Utensils className="w-12 h-12 text-orange-500" />
+        </div>
+        <div className="space-y-4">
+          <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-white">Meal Recommendations are Premium</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto text-lg leading-relaxed">
+            Get personalized meal suggestions, grocery lists, and nutritional plans tailored to your goals with a Pro or Premium subscription.
+          </p>
+        </div>
+        <a 
+          href="/dashboard/subscription"
+          className="px-10 py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-2xl transition-all duration-300 shadow-lg shadow-orange-900/20 hover:scale-105 active:scale-95"
+        >
+          View Subscription Plans
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto pb-24 font-sans space-y-8">

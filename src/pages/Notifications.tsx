@@ -30,14 +30,12 @@ export default function Notifications() {
     
     const q = query(
       collection(db, 'notifications'),
-      where('userId', '==', user.uid)
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const fetchedNotifications = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
-      // Sort in memory to avoid composite index requirement
-      fetchedNotifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setNotifications(fetchedNotifications);
+      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'notifications');
@@ -120,8 +118,11 @@ export default function Notifications() {
               
               <Link to={notification.link || (notification.postId ? `/dashboard/feed?post=${notification.postId}` : `/dashboard/user/${notification.actorId}`)} className="flex-1 min-w-0" onClick={() => !notification.read && markAsRead(notification.id)}>
                 <p className="text-sm text-zinc-900 dark:text-white">
-                  <span className="font-semibold hover:underline">
+                  <span className="font-semibold hover:underline flex items-center gap-1">
                     {notification.actorName}
+                    {notification.type === 'admin_message' && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 fill-emerald-500/10" />
+                    )}
                   </span>
                   {' '}
                   {notification.type === 'like' && 'liked your post.'}
@@ -130,7 +131,7 @@ export default function Notifications() {
                   {notification.type === 'message' && 'sent you a message.'}
                   {notification.type === 'admin_message' && (
                     <>
-                      sent you an official message: <span className="italic text-zinc-600 dark:text-zinc-400">"{notification.message}"</span>
+                      posted a new update: <span className="italic text-zinc-600 dark:text-zinc-400">"{notification.message}"</span>
                     </>
                   )}
                 </p>

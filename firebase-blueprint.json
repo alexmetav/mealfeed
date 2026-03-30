@@ -7,11 +7,14 @@
       "properties": {
         "uid": { "type": "string", "description": "The user's unique ID." },
         "email": { "type": "string", "format": "email", "description": "The user's email address." },
-        "username": { "type": "string", "description": "The user's display name." },
+        "username": { "type": "string", "description": "The user's unique username." },
+        "displayName": { "type": "string", "description": "The user's display name." },
         "profileImage": { "type": "string", "description": "URL or base64 of the user's profile image." },
         "subscriptionPlan": { "type": "string", "enum": ["free", "premium", "pro"], "description": "The user's subscription tier." },
         "healthScore": { "type": "number", "description": "The user's overall health score (0-100)." },
         "role": { "type": "string", "enum": ["user", "admin"], "description": "The user's role." },
+        "gender": { "type": "string", "enum": ["male", "female", "other"], "description": "The user's gender." },
+        "bio": { "type": "string", "description": "A short biography of the user." },
         "walletAddress": { "type": "string", "description": "The user's connected Web3 wallet address." },
         "subscriptionExpiresAt": { "type": "string", "format": "date-time", "description": "When the subscription expires." },
         "points": { "type": "number", "description": "Total points earned by the user." },
@@ -32,6 +35,8 @@
         "referralCode": { "type": "string" },
         "referredBy": { "type": "string" },
         "checkInHistory": { "type": "array", "items": { "type": "string" } },
+        "lastUsernameChange": { "type": "string", "format": "date-time" },
+        "lastDisplayNameChange": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "username", "profileImage", "subscriptionPlan", "healthScore", "role", "createdAt", "points", "streak", "dailyLikesCount", "dailyCommentsCount", "dailyPostsCount"]
@@ -63,6 +68,11 @@
         "caption": { "type": "string", "description": "Optional caption provided by the user." },
         "likesCount": { "type": "number", "description": "Number of likes on the post." },
         "commentsCount": { "type": "number", "description": "Number of comments on the post." },
+        "calories": { "type": "number" },
+        "protein": { "type": "number" },
+        "carbs": { "type": "number" },
+        "fat": { "type": "number" },
+        "authorIsCreator": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "authorName", "imageUrl", "foodType", "category", "healthRating", "healthScore", "likesCount", "commentsCount", "createdAt"]
@@ -129,6 +139,7 @@
         "type": { "type": "string", "enum": ["like", "comment", "follow", "message", "admin_message"], "description": "The type of notification." },
         "postId": { "type": "string", "description": "The ID of the post, if applicable." },
         "message": { "type": "string", "description": "The content of the admin message." },
+        "link": { "type": "string", "description": "Optional link for the notification." },
         "read": { "type": "boolean", "description": "Whether the notification has been read." },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -142,7 +153,9 @@
         "users": { "type": "array", "items": { "type": "string" }, "description": "The IDs of the users in the chat." },
         "lastMessage": { "type": "string", "description": "The text of the last message sent." },
         "lastMessageTime": { "type": "string", "format": "date-time", "description": "When the last message was sent." },
-        "userDetails": { "type": "object", "description": "Cached details of the users in the chat." }
+        "userDetails": { "type": "object", "description": "Cached details of the users in the chat." },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "createdBy": { "type": "string" }
       },
       "required": ["users", "lastMessage", "lastMessageTime", "userDetails"]
     },
@@ -198,6 +211,16 @@
     "/chats/{chatId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/Message" },
       "description": "Stores messages within a chat."
+    },
+    "/usernames/{username}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "uid": { "type": "string" }
+        },
+        "required": ["uid"]
+      },
+      "description": "Stores unique username mappings to UIDs."
     }
   }
 }

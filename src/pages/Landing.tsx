@@ -1,4 +1,4 @@
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import { Camera, Activity, Globe, Heart, ArrowRight, Smartphone, Apple, Zap, Brain, Sparkles, Utensils, Leaf } from 'lucide-react';
@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import { useState } from 'react';
 
 export default function Landing() {
+  const navigate = useNavigate();
   const { user, login } = useAuth();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
@@ -20,10 +21,10 @@ export default function Landing() {
         <div className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
           <div className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">MealFeed<span className="text-yellow-500">.</span></div>
           <div className="flex gap-4">
-            <button onClick={login} className="px-5 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:text-white transition-colors">
+            <button onClick={() => navigate('/auth')} className="px-5 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:text-white transition-colors">
               Log In
             </button>
-            <button onClick={login} className="px-5 py-2 text-sm font-medium bg-zinc-900 dark:bg-white text-white dark:text-black rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-sm">
+            <button onClick={() => navigate('/auth')} className="px-5 py-2 text-sm font-medium bg-zinc-900 dark:bg-white text-white dark:text-black rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-sm">
               Join Now
             </button>
           </div>
@@ -100,7 +101,7 @@ export default function Landing() {
             Share your meals, discover global food trends, and receive health insights instantly.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button onClick={login} className="flex items-center justify-center gap-2 px-8 py-4 bg-yellow-600 text-white rounded-full font-semibold hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-900/20 w-full sm:w-auto text-lg">
+            <button onClick={() => navigate('/auth')} className="flex items-center justify-center gap-2 px-8 py-4 bg-yellow-600 text-white rounded-full font-semibold hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-900/20 w-full sm:w-auto text-lg">
               Join Now <ArrowRight className="w-5 h-5" />
             </button>
             <button className="px-8 py-4 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-full font-semibold hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors w-full sm:w-auto text-lg backdrop-blur-md">
@@ -264,7 +265,7 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <button onClick={login} className={clsx(
+              <button onClick={() => navigate('/auth')} className={clsx(
                 "w-full py-4 rounded-2xl font-semibold transition-all duration-300",
                 plan.popular ? "bg-yellow-600 text-white hover:bg-yellow-500 shadow-lg shadow-yellow-900/30" : "bg-zinc-200 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-white/20"
               )}>

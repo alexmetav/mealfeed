@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, where, getCountFromServer } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Trophy, Medal, Crown, Flame, Star, ArrowRight, Target, Users, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -19,29 +19,42 @@ interface LeaderboardUser {
 export default function Leaderboard() {
   const [topUsers, setTopUsers] = useState<LeaderboardUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalParticipants, setTotalParticipants] = useState(0);
 
   useEffect(() => {
-    const fetchLeaderboard = async () => {
+    const fetchTotalParticipants = async () => {
       try {
-        const q = query(
-          collection(db, 'users'),
-          orderBy('points', 'desc'),
-          limit(10)
-        );
-        const snapshot = await getDocs(q);
-        const users = snapshot.docs.map(doc => ({
-          uid: doc.id,
-          ...doc.data()
-        } as LeaderboardUser));
-        setTopUsers(users);
+        const coll = collection(db, 'users');
+        const q = query(coll, where('points', '>', 0));
+        const snapshot = await getCountFromServer(q);
+        setTotalParticipants(snapshot.data().count);
       } catch (error) {
-        console.error('Error fetching leaderboard:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching total participants:', error);
       }
     };
 
-    fetchLeaderboard();
+    fetchTotalParticipants();
+
+    const q = query(
+      collection(db, 'users'),
+      where('points', '>', 0),
+      orderBy('points', 'desc'),
+      limit(10)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const users = snapshot.docs.map(doc => ({
+        uid: doc.id,
+        ...doc.data()
+      } as LeaderboardUser));
+      setTopUsers(users);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching leaderboard:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   if (loading) return <LoadingSpinner />;
@@ -85,7 +98,7 @@ export default function Leaderboard() {
               </div>
               <div className="flex items-center gap-2 bg-black/20 px-4 py-2 rounded-xl border border-white/10">
                 <Users className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-bold">1,240 Participating</span>
+                <span className="text-sm font-bold">{totalParticipants.toLocaleString()} Participating</span>
               </div>
             </div>
           </div>

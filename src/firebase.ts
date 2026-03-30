@@ -1,5 +1,14 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithCustomToken,
+  updateProfile
+} from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -8,13 +17,33 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
+export { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signInWithCustomToken,
+  updateProfile
+};
+
+let isLoggingIn = false;
+
 export const loginWithGoogle = async () => {
+  if (isLoggingIn) return;
+  isLoggingIn = true;
   try {
     console.log("Attempting login with API Key:", firebaseConfig.apiKey);
     await signInWithPopup(auth, googleProvider);
   } catch (error: any) {
     console.error("Login failed", error);
-    alert(`Login failed: ${error.message}`);
+    if (error.code === 'auth/popup-blocked') {
+      alert('Login popup was blocked by your browser. Please allow popups for this site and try again.');
+    } else if (error.code === 'auth/cancelled-popup-request' || error.message?.includes('Pending promise was never set')) {
+      // Ignore these errors as they are usually caused by the user closing the popup or concurrent requests
+      console.log('Login popup closed or cancelled.');
+    } else {
+      alert(`Login failed: ${error.message}`);
+    }
+  } finally {
+    isLoggingIn = false;
   }
 };
 

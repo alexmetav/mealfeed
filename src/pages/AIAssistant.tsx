@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import { Bot, Sparkles, Loader2, Send, User as UserIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { aiChat } from '../services/aiService';
@@ -88,9 +89,12 @@ Guidelines:
         <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto text-lg leading-relaxed">
           Upgrade to AI Pro to unlock personalized health insights, weekly reports, and advanced diet recommendations based on your eating habits.
         </p>
-        <button className="px-10 py-4 bg-yellow-600 text-white font-semibold rounded-full hover:bg-yellow-500 transition-all duration-300 shadow-lg shadow-yellow-900/30 text-lg">
+        <Link 
+          to="/dashboard/subscription"
+          className="inline-block px-10 py-4 bg-yellow-600 text-white font-semibold rounded-full hover:bg-yellow-500 transition-all duration-300 shadow-lg shadow-yellow-900/30 text-lg"
+        >
           Upgrade to AI Pro
-        </button>
+        </Link>
       </div>
     );
   }

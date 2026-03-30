@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Users, Image as ImageIcon, CreditCard, ShieldAlert, MessageSquare, Trash2, X, Send, CheckCircle2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import LoadingSpinner from '../components/LoadingSpinner';
+import ConfirmModal from '../components/ConfirmModal';
 import clsx from 'clsx';
 
 export default function Admin() {
@@ -21,6 +22,7 @@ export default function Admin() {
   const [broadcasting, setBroadcasting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
 
   const fetchAdminData = async () => {
     try {
@@ -38,9 +40,9 @@ export default function Admin() {
         if (plan === 'premium') revenue += 49;
         if (plan === 'pro') revenue += 99;
 
-        userStatsMap[userData.uid] = {
-          uid: userData.uid,
-          username: userData.username,
+        userStatsMap[doc.id] = {
+          uid: doc.id,
+          username: userData.username || userData.displayName || 'Unknown User',
           topPostLikes: 0,
           postCount: 0
         };
@@ -77,13 +79,14 @@ export default function Admin() {
     fetchAdminData();
   }, [profile]);
 
-  const handleDeletePost = async (postId: string) => {
-    if (!window.confirm('Are you sure you want to delete this post?')) return;
+  const handleDeletePost = async () => {
+    if (!deletePostId) return;
     try {
-      await deleteDoc(doc(db, 'posts', postId));
-      setRecentPosts(prev => prev.filter(p => p.id !== postId));
+      await deleteDoc(doc(db, 'posts', deletePostId));
+      setRecentPosts(prev => prev.filter(p => p.id !== deletePostId));
+      setDeletePostId(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
+      handleFirestoreError(error, OperationType.DELETE, `posts/${deletePostId}`);
     }
   };
 
@@ -219,6 +222,55 @@ export default function Admin() {
 
       <div className="bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 rounded-[2rem] overflow-hidden shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
         <div className="p-6 border-b border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5">
+          <h2 className="text-xl font-semibold text-zinc-900 dark:text-white tracking-tight">Recent Signups</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-zinc-50 dark:bg-black/20 text-zinc-500 dark:text-zinc-400">
+              <tr>
+                <th className="px-6 py-4 font-medium uppercase tracking-wider text-xs">User</th>
+                <th className="px-6 py-4 font-medium uppercase tracking-wider text-xs">Joined</th>
+                <th className="px-6 py-4 font-medium uppercase tracking-wider text-xs">Plan</th>
+                <th className="px-6 py-4 font-medium uppercase tracking-wider text-xs text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-white/10">
+              {userAnalytics.slice(0, 10).map((user: any) => (
+                <tr key={user.uid} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800" alt="" />
+                      <span className="font-bold text-zinc-900 dark:text-white">@{user.username}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
+                  <td className="px-6 py-4">
+                    <span className={clsx(
+                      "px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      user.subscriptionPlan === 'pro' ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" :
+                      user.subscriptionPlan === 'premium' ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                      "bg-zinc-100 dark:bg-white/10 text-zinc-500 dark:text-zinc-400"
+                    )}>
+                      {user.subscriptionPlan || 'free'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => setMessageModal({ show: true, userId: user.uid, userName: user.username })}
+                      className="text-yellow-600 hover:text-yellow-500 font-bold text-xs uppercase tracking-widest"
+                    >
+                      Message
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 rounded-[2rem] overflow-hidden shadow-xl shadow-zinc-200/50 dark:shadow-black/20">
+        <div className="p-6 border-b border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/5">
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-white tracking-tight">Recent Posts</h2>
         </div>
         <div className="overflow-x-auto">
@@ -255,7 +307,7 @@ export default function Admin() {
                         <MessageSquare className="w-5 h-5" />
                       </button>
                       <button 
-                        onClick={() => handleDeletePost(post.id)}
+                        onClick={() => setDeletePostId(post.id)}
                         className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                         title="Delete Post"
                       >
@@ -269,6 +321,15 @@ export default function Admin() {
           </table>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={!!deletePostId}
+        title="Delete Post"
+        message="Are you sure you want to delete this post? This action cannot be undone."
+        onConfirm={handleDeletePost}
+        onCancel={() => setDeletePostId(null)}
+        confirmText="Delete"
+      />
 
       {/* Broadcast Modal */}
       {broadcastModal && (

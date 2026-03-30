@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon, Trophy, Utensils, Menu, X, Bell, Medal } from 'lucide-react';
+import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon, Trophy, Utensils, Menu, X, Bell, Medal, Lock } from 'lucide-react';
 import clsx from 'clsx';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -107,6 +107,7 @@ export default function DashboardLayout() {
               <div className="space-y-1">
                 {section.items.map((item) => {
                   const isActive = location.pathname === item.path;
+                  const isLocked = section.title === 'Health' && profile?.subscriptionPlan === 'free' && profile?.role !== 'admin';
                   
                   if (item.isComingSoon) {
                     return (
@@ -145,6 +146,9 @@ export default function DashboardLayout() {
                         isActive ? "text-yellow-600 dark:text-yellow-500" : item.isHighlighted ? "text-yellow-500" : "text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white"
                       )} strokeWidth={isActive ? 2.5 : 2} />
                       <span className="text-sm">{item.name}</span>
+                      {isLocked && (
+                        <Lock className="ml-auto w-3 h-3 text-zinc-500" />
+                      )}
                       {item.badge ? (
                         <span className="ml-auto flex items-center justify-center h-4.5 w-4.5 text-[9px] font-bold text-white bg-red-500 rounded-full">
                           {item.badge > 99 ? '99+' : item.badge}

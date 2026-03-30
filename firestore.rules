@@ -15,8 +15,9 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "alexmetav@gmail.com" && request.auth.token.email_verified == true));
+        (request.auth.token.email == "alexmetav@gmail.com" || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function uidUnchanged() {
@@ -39,14 +40,17 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser(data) {
-      return hasOnlyAllowedFields(['uid', 'email', 'username', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'dailyPostsCount', 'lastActionDate', 'checkInHistory', 'isCreator', 'referralCode', 'referredBy', 'referralsCount', 'followersCount', 'followingCount', 'postsCount', 'spamTimeoutUntil', 'failedScanCount', 'scanTimeoutUntil']) &&
+      return hasOnlyAllowedFields(['uid', 'email', 'username', 'displayName', 'profileImage', 'subscriptionPlan', 'healthScore', 'role', 'gender', 'bio', 'createdAt', 'walletAddress', 'subscriptionExpiresAt', 'points', 'streak', 'lastCheckIn', 'dailyLikesCount', 'dailyCommentsCount', 'dailyPostsCount', 'lastActionDate', 'checkInHistory', 'isCreator', 'referralCode', 'referredBy', 'referralsCount', 'followersCount', 'followingCount', 'postsCount', 'spamTimeoutUntil', 'failedScanCount', 'scanTimeoutUntil', 'lastUsernameChange', 'lastDisplayNameChange']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
              data.email is string && isValidEmail(data.email) &&
              data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
              (!('profileImage' in data) || (data.profileImage is string && data.profileImage.size() < 1000000)) &&
              data.subscriptionPlan in ['free', 'premium', 'pro'] &&
              (!('healthScore' in data) || (data.healthScore is number && data.healthScore >= 0 && data.healthScore <= 100)) &&
              data.role in ['user', 'admin'] &&
+             (!('gender' in data) || data.gender in ['male', 'female', 'other']) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() < 500)) &&
              (!('walletAddress' in data) || (data.walletAddress is string && data.walletAddress.size() < 100)) &&
              (!('subscriptionExpiresAt' in data) || data.subscriptionExpiresAt is string) &&
              data.points is number &&
@@ -60,13 +64,15 @@ service cloud.firestore {
              (!('isCreator' in data) || data.isCreator is bool) &&
              (!('referralCode' in data) || data.referralCode is string) &&
              (!('referredBy' in data) || data.referredBy is string) &&
-             (!('referralsCount' in data) || data.referralsCount is number) &&
-             (!('followersCount' in data) || data.followersCount is number) &&
-             (!('followingCount' in data) || data.followingCount is number) &&
-             (!('postsCount' in data) || data.postsCount is number) &&
+             (!('referralsCount' in data) || (data.referralsCount is number && data.referralsCount >= 0)) &&
+             (!('followersCount' in data) || (data.followersCount is number && data.followersCount >= 0)) &&
+             (!('followingCount' in data) || (data.followingCount is number && data.followingCount >= 0)) &&
+             (!('postsCount' in data) || (data.postsCount is number && data.postsCount >= 0)) &&
              (!('spamTimeoutUntil' in data) || data.spamTimeoutUntil is string) &&
              (!('failedScanCount' in data) || data.failedScanCount is number) &&
              (!('scanTimeoutUntil' in data) || data.scanTimeoutUntil is string) &&
+             (!('lastUsernameChange' in data) || data.lastUsernameChange is string) &&
+             (!('lastDisplayNameChange' in data) || data.lastDisplayNameChange is string) &&
              data.createdAt is string; // ISO string
     }
 
@@ -80,7 +86,7 @@ service cloud.firestore {
     function isValidPost(data) {
       return hasOnlyAllowedFields(['userId', 'authorName', 'authorImage', 'imageUrl', 'foodType', 'category', 'healthRating', 'healthScore', 'caption', 'likesCount', 'commentsCount', 'createdAt', 'calories', 'protein', 'carbs', 'fat', 'authorIsCreator']) &&
              data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
-             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 50 &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 100 &&
              (!('authorImage' in data) || (data.authorImage is string && data.authorImage.size() < 1000000)) &&
              data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() < 1000000 &&
              data.foodType is string && data.foodType.size() > 0 && data.foodType.size() < 100 &&
@@ -147,12 +153,14 @@ service cloud.firestore {
     }
 
     function isValidChat(data) {
-      return hasOnlyAllowedFields(['users', 'lastMessage', 'lastMessageTime', 'userDetails']) &&
+      return hasOnlyAllowedFields(['users', 'lastMessage', 'lastMessageTime', 'userDetails', 'status', 'createdBy']) &&
              data.users is list && data.users.size() == 2 &&
              data.users.hasAll([request.auth.uid]) &&
              data.lastMessage is string &&
              (data.lastMessageTime is timestamp || data.lastMessageTime == null) &&
-             data.userDetails is map;
+             data.userDetails is map &&
+             (!('status' in data) || data.status in ['pending', 'accepted']) &&
+             (!('createdBy' in data) || data.createdBy is string);
     }
 
     function isValidMessage(data) {
@@ -170,7 +178,15 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && isOwner(userId) && uidUnchanged() && (request.resource.data.role == 'user' || isAdmin());
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
         (isOwner(userId) && uidNotModified() && (request.resource.data.role == resource.data.role || isAdmin())) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points', 'followersCount', 'followingCount', 'postsCount', 'referralsCount']))
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) && (request.resource.data.followersCount == resource.data.followersCount + 1 || request.resource.data.followersCount == resource.data.followersCount - 1)) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['points']) && (request.resource.data.points == resource.data.points + 50 || request.resource.data.points == resource.data.points + 100 || request.resource.data.points == resource.data.points + 200 || request.resource.data.points == resource.data.points + 500 || request.resource.data.points == resource.data.points + 1000 || request.resource.data.points == resource.data.points + 2000 || request.resource.data.points == resource.data.points + 5000)) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['referralsCount', 'points']) && 
+         request.resource.data.referralsCount == resource.data.referralsCount + 1 &&
+         request.resource.data.points == resource.data.points + 5000) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['referredBy', 'points']) && 
+         request.resource.data.referredBy is string &&
+         request.resource.data.points == resource.data.points + 1000) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isCreator']) && request.resource.data.isCreator == true)
       );
       allow delete: if isAdmin();
     }
@@ -180,19 +196,20 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidPost(request.resource.data) && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && isValidPost(request.resource.data) && 
         ((request.resource.data.userId == request.auth.uid && request.resource.data.userId == resource.data.userId) || 
-         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'commentsCount'])));
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount']) && (request.resource.data.likesCount == resource.data.likesCount + 1 || request.resource.data.likesCount == resource.data.likesCount - 1)) ||
+         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentsCount']) && (request.resource.data.commentsCount == resource.data.commentsCount + 1 || request.resource.data.commentsCount == resource.data.commentsCount - 1)));
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /likes/{likeId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidLike(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && isValidLike(request.resource.data) && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /saved_posts/{saveId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && isValidSavedPost(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow create, update: if isAuthenticated() && isValidSavedPost(request.resource.data) && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
@@ -212,13 +229,23 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && isValidNotification(request.resource.data) && request.resource.data.actorId == request.auth.uid;
-      allow update: if isAuthenticated() && isValidNotification(request.resource.data) && request.resource.data.userId == request.auth.uid && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && 
+        (
+          (resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])) ||
+          (resource.data.actorId == request.auth.uid && isValidNotification(request.resource.data) && request.resource.data.actorId == request.auth.uid && request.resource.data.userId == resource.data.userId)
+        );
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.actorId == request.auth.uid || isAdmin());
     }
 
     match /activity_logs/{logId} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
       allow create: if isAuthenticated() && isValidActivityLog(request.resource.data);
+    }
+
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.uid;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.uid;
     }
 
     match /chats/{chatId} {

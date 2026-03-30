@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { collection, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { UploadCloud, X, Loader2, CheckCircle2, AlertCircle, Camera, Image as ImageIcon } from 'lucide-react';
+import { UploadCloud, X, Loader2, CheckCircle2, AlertCircle, Camera, Image as ImageIcon, Lock } from 'lucide-react';
 import clsx from 'clsx';
 import { aiVision } from '../services/aiService';
 import { checkSpam, logActivity } from '../services/spamService';
@@ -29,6 +29,8 @@ export default function Upload() {
   const { user, profile, refreshProfile } = useAuth();
   const { showPoints } = usePoints();
   const navigate = useNavigate();
+  
+  const isSubscribed = profile?.subscriptionPlan === 'pro' || profile?.subscriptionPlan === 'premium' || profile?.role === 'admin';
   const [image, setImage] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string>('');
   const [caption, setCaption] = useState('');
@@ -84,12 +86,31 @@ export default function Upload() {
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    
+    // Resize to max 800x800 for Firestore limits
+    const MAX_WIDTH = 800;
+    const MAX_HEIGHT = 800;
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+
+    if (width > height) {
+      if (width > MAX_WIDTH) {
+        height *= MAX_WIDTH / width;
+        width = MAX_WIDTH;
+      }
+    } else {
+      if (height > MAX_HEIGHT) {
+        width *= MAX_HEIGHT / height;
+        height = MAX_HEIGHT;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
     
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, 0, 0, width, height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       setImage(dataUrl);
       setMimeType('image/jpeg');
@@ -177,7 +198,7 @@ export default function Upload() {
         const base64Data = currentImage.split(',')[1];
         
         const prompt = `Analyze this image. First, determine if it is a food item. Live animals or non-food objects should be marked as NOT food.
-        Provide the following information in a JSON format:
+        Provide the following information:
         - isFood: boolean (true if it's food, false otherwise)
         - foodType: Name of the food (or "Not Food" if isFood is false)
         - category: Category like Breakfast, Lunch, Snack, etc. (or "None" if isFood is false)
@@ -187,11 +208,26 @@ export default function Upload() {
         - calories: Estimated calories (or 0 if isFood is false)
         - protein: Estimated protein in grams (or 0 if isFood is false)
         - carbs: Estimated carbs in grams (or 0 if isFood is false)
-        - fat: Estimated fat in grams (or 0 if isFood is false)
-        
-        Return ONLY the JSON object.`;
+        - fat: Estimated fat in grams (or 0 if isFood is false)`;
 
-        const response = await aiVision(prompt, base64Data, mimeType);
+        const schema = {
+          type: 'object',
+          properties: {
+            isFood: { type: 'boolean' },
+            foodType: { type: 'string' },
+            category: { type: 'string' },
+            healthRating: { type: 'string', enum: ['High', 'Medium', 'Low'] },
+            healthScore: { type: 'number' },
+            healthTips: { type: 'string' },
+            calories: { type: 'number' },
+            protein: { type: 'number' },
+            carbs: { type: 'number' },
+            fat: { type: 'number' },
+          },
+          required: ['isFood', 'foodType', 'category', 'healthRating', 'healthScore', 'healthTips', 'calories', 'protein', 'carbs', 'fat'],
+        };
+
+        const response = await aiVision(prompt, base64Data, mimeType, schema);
 
         if (response) {
           try {
@@ -259,33 +295,50 @@ export default function Upload() {
   const handlePost = async () => {
     if (!user || !profile || !image || !analysis) return;
     
-    // Anti-spam check
-    const spamCheck = await checkSpam(user.uid, 'post', profile.spamTimeoutUntil);
-    if (spamCheck.isSpam) {
-      const remainingTime = new Date(spamCheck.timeoutUntil!).getTime() - Date.now();
-      const hours = Math.ceil(remainingTime / (1000 * 60 * 60));
-      alert(`Spam activity detected. Your account is timed out for ${hours} more hours.`);
-      return;
-    }
-
     setLoading(true);
+    setError(null);
 
     try {
+      // Anti-spam check
+      const spamCheck = await checkSpam(user.uid, 'post', profile.spamTimeoutUntil);
+      if (spamCheck.isSpam) {
+        const remainingTime = new Date(spamCheck.timeoutUntil!).getTime() - Date.now();
+        const hours = Math.ceil(remainingTime / (1000 * 60 * 60));
+        alert(`Spam activity detected. Your account is timed out for ${hours} more hours.`);
+        setLoading(false);
+        return;
+      }
+
+      // Normalize analysis data to ensure correct types for Firestore rules
+      const normalizedAnalysis = {
+        ...analysis,
+        foodType: analysis.foodType || 'Unknown Food',
+        category: analysis.category || 'Other',
+        healthRating: (analysis.healthRating === 'High' || analysis.healthRating === 'Medium' || analysis.healthRating === 'Low') 
+          ? analysis.healthRating 
+          : 'Medium', // Fallback to Medium if AI returns invalid rating
+        healthScore: Number(analysis.healthScore) || 0,
+        calories: Number(analysis.calories) || 0,
+        protein: Number(analysis.protein) || 0,
+        carbs: Number(analysis.carbs) || 0,
+        fat: Number(analysis.fat) || 0,
+      };
+
       const postRef = doc(collection(db, 'posts'));
       await setDoc(postRef, {
         userId: user.uid,
-        authorName: profile.username,
-        authorImage: profile.profileImage,
+        authorName: profile.username || profile.displayName || 'User',
+        authorImage: profile.profileImage || '',
         authorIsCreator: profile.isCreator || false,
         imageUrl: image,
-        foodType: analysis.foodType,
-        category: analysis.category,
-        healthRating: analysis.healthRating,
-        healthScore: analysis.healthScore,
-        calories: analysis.calories,
-        protein: analysis.protein,
-        carbs: analysis.carbs,
-        fat: analysis.fat,
+        foodType: normalizedAnalysis.foodType,
+        category: normalizedAnalysis.category,
+        healthRating: normalizedAnalysis.healthRating,
+        healthScore: normalizedAnalysis.healthScore,
+        calories: normalizedAnalysis.calories,
+        protein: normalizedAnalysis.protein,
+        carbs: normalizedAnalysis.carbs,
+        fat: normalizedAnalysis.fat,
         caption,
         likesCount: 0,
         commentsCount: 0,
@@ -314,6 +367,7 @@ export default function Upload() {
       await refreshProfile();
       navigate('/dashboard');
     } catch (error) {
+      console.error('Post creation failed:', error);
       handleFirestoreError(error, OperationType.CREATE, 'posts');
       setLoading(false);
     }
@@ -447,7 +501,7 @@ export default function Upload() {
                   <span className="font-semibold text-sm">Analysis Complete</span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-2 gap-6 relative">
                   <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Food Detected</p>
                     <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.foodType}</p>
@@ -456,17 +510,38 @@ export default function Upload() {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Category</p>
                     <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.category}</p>
                   </div>
-                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
+                  
+                  {/* Health Rating & Score - Restricted for Free */}
+                  <div className={clsx(
+                    "bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5 transition-all duration-500",
+                    !isSubscribed && "blur-md select-none pointer-events-none opacity-50"
+                  )}>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Rating</p>
                     <p className="font-semibold text-lg text-zinc-900 dark:text-white">{analysis.healthRating}</p>
                   </div>
-                  <div className="bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5">
+                  <div className={clsx(
+                    "bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5 transition-all duration-500",
+                    !isSubscribed && "blur-md select-none pointer-events-none opacity-50"
+                  )}>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Health Score</p>
                     <p className="font-semibold text-2xl text-yellow-500 tracking-tight">{analysis.healthScore}<span className="text-sm text-zinc-500 font-medium">/100</span></p>
                   </div>
+
+                  {!isSubscribed && (
+                    <div className="absolute inset-x-0 bottom-0 top-[calc(50%+12px)] flex items-center justify-center z-20">
+                      <div className="bg-white/80 dark:bg-black/80 backdrop-blur-md px-6 py-3 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-xl flex flex-col items-center gap-2 text-center max-w-[80%]">
+                        <Lock className="w-5 h-5 text-yellow-500" />
+                        <p className="text-[10px] font-bold text-zinc-900 dark:text-white uppercase tracking-wider">Upgrade to Pro for Health Insights</p>
+                        <Link to="/dashboard/subscription" className="text-[10px] text-yellow-500 font-bold hover:underline">View Plans</Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-4 gap-4 pt-4 border-t border-zinc-200 dark:border-white/10">
+                <div className={clsx(
+                  "grid grid-cols-4 gap-4 pt-4 border-t border-zinc-200 dark:border-white/10 transition-all duration-500",
+                  !isSubscribed && "blur-sm select-none pointer-events-none opacity-40"
+                )}>
                   <div className="text-center">
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-1">Calories</p>
                     <p className="font-semibold text-zinc-900 dark:text-white">{analysis.calories}</p>
@@ -485,7 +560,10 @@ export default function Upload() {
                   </div>
                 </div>
                 
-                <div className="pt-6 border-t border-zinc-200 dark:border-white/10">
+                <div className={clsx(
+                  "pt-6 border-t border-zinc-200 dark:border-white/10 transition-all duration-500",
+                  !isSubscribed && "blur-sm select-none pointer-events-none opacity-40"
+                )}>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wider mb-3">Health Tip</p>
                   <p className="text-zinc-600 dark:text-zinc-300 text-sm leading-relaxed">{analysis.healthTips}</p>
                 </div>

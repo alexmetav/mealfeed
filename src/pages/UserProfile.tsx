@@ -140,6 +140,7 @@ export default function UserProfile() {
           return next;
         });
       }
+      console.error('Like error:', error);
       handleFirestoreError(error, OperationType.WRITE, `likes/${likeId}`);
     }
   };
@@ -349,7 +350,7 @@ export default function UserProfile() {
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
                 <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
                   <div className="flex items-center gap-1.5">
-                    <Heart className="w-6 h-6 fill-white" /> {post.likesCount || 0}
+                    <Heart className={clsx("w-6 h-6", likedPosts.has(post.id) ? "fill-yellow-500 text-yellow-500" : "fill-white text-white")} /> {post.likesCount || 0}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <MessageCircle className="w-6 h-6 fill-white" /> {post.commentsCount || 0}

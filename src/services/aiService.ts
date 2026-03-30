@@ -1,109 +1,69 @@
-export const generateContent = async (prompt: string): Promise<string | null> => {
-  try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) return null;
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1000
-      })
-    });
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (error) {
-    console.error('AI Service error:', error);
-    return null;
+import { GoogleGenAI, Type } from "@google/genai";
+
+const getGeminiClient = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("Gemini API Key is not configured.");
   }
+  return new GoogleGenAI({ apiKey });
 };
 
-export const aiVision = async (prompt: string, imageBase64: string, mimeType: string): Promise<string | null> => {
-  try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) return null;
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } }
-          ]
-        }],
-        max_tokens: 1000
-      })
-    });
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (error) {
-    console.error('aiVision error:', error);
-    return null;
-  }
-};
-export const aiChat = async (
-  messages: { role: 'user' | 'assistant'; content: string }[],
-  systemInstruction?: string
-): Promise<string | null> => {
-  try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) return null;
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          ...(systemInstruction ? [{ role: 'system', content: systemInstruction }] : []),
-          ...messages
+export const aiVision = async (prompt: string, base64Data: string, mimeType: string, schema?: any) => {
+  const ai = getGeminiClient();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [
+      {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType,
+            },
+          },
         ],
-        max_tokens: 1000
-      })
-    });
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (error) {
-    console.error('aiChat error:', error);
-    return null;
-  }
-};
-export const aiJson = async (prompt: string): Promise<string | null> => {
-  try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) return null;
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: 'You are a helpful assistant that outputs JSON.' },
-          { role: 'user', content: prompt }
-        ],
-        max_tokens: 1000,
-        response_format: { type: 'json_object' }
-      })
-    });
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (error) {
-    console.error('aiJson error:', error);
-    return null;
-  }
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: schema,
+    },
+  });
+
+  return response.text;
+};
+
+export const aiChat = async (messages: { role: string; content: string }[], systemInstruction?: string) => {
+  const ai = getGeminiClient();
+  
+  // Convert messages to Gemini format
+  const contents = messages.map(m => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.content }]
+  }));
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents,
+    config: {
+      systemInstruction,
+    },
+  });
+
+  return response.text;
+};
+
+export const aiJson = async (prompt: string, schema?: any) => {
+  const ai = getGeminiClient();
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: [{ parts: [{ text: prompt }] }],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: schema,
+    },
+  });
+
+  return response.text;
 };

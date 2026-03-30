@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, orderBy, doc, updateDoc, increment, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Settings, Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck, MessageCircle, RefreshCw } from 'lucide-react';
+import { Settings, Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck, MessageCircle, RefreshCw, Edit3, AlertCircle, CheckCircle2, Loader2, User } from 'lucide-react';
 import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PostModal from '../components/PostModal';
 import CommentsModal from '../components/CommentsModal';
+import ConfirmModal from '../components/ConfirmModal';
 import { aiVision } from '../services/aiService';
 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,10 +16,17 @@ import { usePoints } from '../context/PointsContext';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, updateUsername, updateDisplayName } = useAuth();
   const { showPoints } = usePoints();
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState(profile?.displayName || '');
+  const [editUsername, setEditUsername] = useState(profile?.username || '');
+  const [editBio, setEditBio] = useState(profile?.bio || '');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
   const [followers, setFollowers] = useState<any[]>([]);
   const [following, setFollowing] = useState<any[]>([]);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
@@ -31,6 +39,69 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
   const [recheckingHealth, setRecheckingHealth] = useState(false);
   const [commentsModalPost, setCommentsModalPost] = useState<{id: string, authorId: string} | null>(null);
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
+  const [rescanPost, setRescanPost] = useState<any | null>(null);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !profile) return;
+    setEditError(null);
+    setEditSuccess(null);
+    setEditLoading(true);
+
+    try {
+      let changed = false;
+      
+      if (editName !== profile.displayName) {
+        await updateDisplayName(editName);
+        changed = true;
+      }
+      
+      if (editUsername !== profile.username) {
+        await updateUsername(editUsername);
+        changed = true;
+      }
+
+      if (editBio !== profile.bio) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          bio: editBio
+        });
+        changed = true;
+      }
+
+      if (changed) {
+        await refreshProfile();
+        setEditSuccess('Profile updated successfully!');
+        setTimeout(() => setShowEditModal(false), 1500);
+      } else {
+        setShowEditModal(false);
+      }
+    } catch (err: any) {
+      setEditError(err.message);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const getCooldownMessage = (lastChange: string | undefined) => {
+    if (!lastChange) return null;
+    const last = new Date(lastChange);
+    const now = new Date();
+    const diff = now.getTime() - last.getTime();
+    const daysLeft = Math.ceil((14 * 24 * 60 * 60 * 1000 - diff) / (24 * 60 * 60 * 1000));
+    if (daysLeft > 0) {
+      return `You can change this again in ${daysLeft} days.`;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (profile) {
+      setEditName(profile.displayName || '');
+      setEditUsername(profile.username || '');
+      setEditBio(profile.bio || '');
+    }
+  }, [profile]);
 
   const fetchPostsAndFollows = async () => {
     if (!user) return;
@@ -164,23 +235,25 @@ export default function Profile() {
           return next;
         });
       }
+      console.error('Like error:', error);
       handleFirestoreError(error, OperationType.WRITE, `likes/${likeId}`);
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!window.confirm('Are you sure you want to delete this post?')) return;
+  const handleDeletePost = async () => {
+    if (!deletePostId) return;
     try {
-      await deleteDoc(doc(db, 'posts', postId));
+      await deleteDoc(doc(db, 'posts', deletePostId));
       if (user) {
         await updateDoc(doc(db, 'users', user.uid), {
           postsCount: increment(-1)
         });
       }
-      setPosts(posts.filter(p => p.id !== postId));
+      setPosts(posts.filter(p => p.id !== deletePostId));
       setSelectedPost(null);
+      setDeletePostId(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
+      handleFirestoreError(error, OperationType.DELETE, `posts/${deletePostId}`);
     }
   };
 
@@ -198,12 +271,14 @@ export default function Profile() {
     }
   };
 
-  const handleRescan = async (post: any) => {
-    if (!window.confirm('Are you sure you want to rescan this image? This will update the nutritional information.')) return;
-    setRescanningId(post.id);
+  const handleRescan = async () => {
+    if (!rescanPost) return;
+    setRescanningId(rescanPost.id);
+    const postToRescan = rescanPost;
+    setRescanPost(null);
     try {
-      const base64Data = post.imageUrl.split(',')[1] || post.imageUrl;
-      const mimeType = post.imageUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+      const base64Data = postToRescan.imageUrl.split(',')[1] || postToRescan.imageUrl;
+      const mimeType = postToRescan.imageUrl.split(';')[0].split(':')[1] || 'image/jpeg';
       
       const prompt = `Analyze this food image. Provide the following information in a JSON format:
       - foodType: Name of the food
@@ -224,7 +299,7 @@ export default function Profile() {
         const cleanedText = response.replace(/```json/gi, '').replace(/```/g, '').trim();
         const parsedResult = JSON.parse(cleanedText);
         
-        await updateDoc(doc(db, 'posts', post.id), {
+        await updateDoc(doc(db, 'posts', postToRescan.id), {
           foodType: parsedResult.foodType,
           category: parsedResult.category,
           healthRating: parsedResult.healthRating,
@@ -234,16 +309,16 @@ export default function Profile() {
           carbs: parsedResult.carbs,
           fat: parsedResult.fat,
         });
-        alert('Post successfully rescanned and updated!');
+        // alert('Post successfully rescanned and updated!');
         fetchPostsAndFollows(); // Refresh to get updated data
       }
     } catch (error: any) {
       console.error('Rescan failed:', error);
-      if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
-        alert('AI Quota Exceeded: Insufficient balance in OpenAI account. Please check your billing details.');
-      } else {
-        alert('Failed to rescan image. Please try again later.');
-      }
+      // if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
+      //   alert('AI Quota Exceeded: Insufficient balance in OpenAI account. Please check your billing details.');
+      // } else {
+      //   alert('Failed to rescan image. Please try again later.');
+      // }
     } finally {
       setRescanningId(null);
     }
@@ -334,6 +409,12 @@ export default function Profile() {
                 <CalendarCheck className="w-4 h-4" />
                 {(profile.checkInHistory?.includes(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`) || profile.lastCheckIn?.split('T')[0] === new Date().toISOString().split('T')[0]) ? 'Checked In' : 'Daily Check-in'}
               </button>
+              <button 
+                onClick={() => setShowEditModal(true)}
+                className="p-2 bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 rounded-full text-zinc-900 dark:text-white transition-all duration-300 border border-zinc-200 dark:border-white/5 shadow-sm"
+              >
+                <Edit3 className="w-5 h-5" />
+              </button>
               <button className="p-2 bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 rounded-full text-zinc-900 dark:text-white transition-all duration-300 border border-zinc-200 dark:border-white/5 shadow-sm">
                 <Settings className="w-5 h-5" />
               </button>
@@ -376,24 +457,24 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="text-sm text-zinc-600 dark:text-zinc-300 max-w-md mx-auto md:mx-0 leading-relaxed">
-            <div className="font-medium text-zinc-900 dark:text-white mb-2 flex items-center justify-center md:justify-start gap-2">
-              Health Score: 
-              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-md border border-emerald-500/20 font-bold">{profile.healthScore}/100</span>
-              <button 
-                onClick={handleRecheckHealthScore}
-                disabled={recheckingHealth}
-                className={clsx(
-                  "p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-white/10 transition-all duration-300 text-zinc-500 hover:text-emerald-500",
-                  recheckingHealth && "animate-spin text-emerald-500"
-                )}
-                title="Recheck live health score"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
+            <div className="text-sm text-zinc-600 dark:text-zinc-300 max-w-md mx-auto md:mx-0 leading-relaxed">
+              <div className="font-medium text-zinc-900 dark:text-white mb-2 flex items-center justify-center md:justify-start gap-2">
+                Health Score: 
+                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-md border border-emerald-500/20 font-bold">{profile.healthScore}/100</span>
+                <button 
+                  onClick={handleRecheckHealthScore}
+                  disabled={recheckingHealth}
+                  className={clsx(
+                    "p-1.5 rounded-full hover:bg-zinc-200 dark:hover:bg-white/10 transition-all duration-300 text-zinc-500 hover:text-emerald-500",
+                    recheckingHealth && "animate-spin text-emerald-500"
+                  )}
+                  title="Recheck live health score"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p>{profile.bio || 'Food lover & health enthusiast. Sharing my journey one meal at a time. 🥗🍕'}</p>
             </div>
-            <p>Food lover & health enthusiast. Sharing my journey one meal at a time. 🥗🍕</p>
-          </div>
         </div>
       </div>
 
@@ -438,7 +519,7 @@ export default function Profile() {
               <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
                 <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
                   <div className="flex items-center gap-1.5">
-                    <Heart className="w-6 h-6 fill-white" /> {post.likesCount || 0}
+                    <Heart className={clsx("w-6 h-6", likedPosts.has(post.id) ? "fill-yellow-500 text-yellow-500" : "fill-white text-white")} /> {post.likesCount || 0}
                   </div>
                   <div className="flex items-center gap-1.5">
                     <MessageCircle className="w-6 h-6 fill-white" /> {post.commentsCount || 0}
@@ -537,9 +618,9 @@ export default function Profile() {
           post={selectedPost}
           isOpen={true}
           onClose={() => setSelectedPost(null)}
-          onDelete={handleDeletePost}
+          onDelete={setDeletePostId}
           onSaveCaption={handleSaveCaption}
-          onRescan={handleRescan}
+          onRescan={setRescanPost}
           rescanningId={rescanningId}
           currentUserId={user?.uid}
           isLiked={likedPosts.has(selectedPost.id)}
@@ -548,6 +629,24 @@ export default function Profile() {
         />
       )}
 
+      <ConfirmModal
+        isOpen={!!deletePostId}
+        title="Delete Post"
+        message="Are you sure you want to delete this post? This action cannot be undone."
+        onConfirm={handleDeletePost}
+        onCancel={() => setDeletePostId(null)}
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!rescanPost}
+        title="Rescan Image"
+        message="Are you sure you want to rescan this image? This will update the nutritional information."
+        onConfirm={handleRescan}
+        onCancel={() => setRescanPost(null)}
+        confirmText="Rescan"
+      />
+
       {commentsModalPost && (
         <CommentsModal
           postId={commentsModalPost.id}
@@ -555,6 +654,100 @@ export default function Profile() {
           isOpen={!!commentsModalPost}
           onClose={() => setCommentsModalPost(null)}
         />
+      )}
+
+      {/* Edit Profile Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-50 dark:bg-black/60 backdrop-blur-sm" onClick={() => setShowEditModal(false)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-[#1c1c1e] border border-zinc-200 dark:border-white/10 rounded-[2.5rem] p-8 max-w-md w-full relative shadow-2xl" 
+            onClick={e => e.stopPropagation()}
+          >
+            <button 
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-6 right-6 text-zinc-500 hover:text-zinc-900 dark:text-white transition-colors bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 p-2 rounded-full"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h2 className="text-2xl font-bold mb-2 text-zinc-900 dark:text-white tracking-tight">Edit Profile</h2>
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-8">Update your identity on MealFeed.</p>
+
+            <form onSubmit={handleUpdateProfile} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1">Display Name</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                  <input 
+                    type="text" 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 transition-all"
+                    placeholder="Your Name"
+                  />
+                </div>
+                {getCooldownMessage(profile.lastDisplayNameChange) && (
+                  <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium ml-1">
+                    {getCooldownMessage(profile.lastDisplayNameChange)}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1">Username</label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">@</div>
+                  <input 
+                    type="text" 
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value.toLowerCase())}
+                    className="w-full pl-12 pr-4 py-4 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 transition-all"
+                    placeholder="username"
+                  />
+                </div>
+                {getCooldownMessage(profile.lastUsernameChange) && (
+                  <p className="text-[10px] text-yellow-600 dark:text-yellow-500 font-medium ml-1">
+                    {getCooldownMessage(profile.lastUsernameChange)}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1">Bio</label>
+                <textarea 
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  className="w-full px-4 py-4 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-yellow-500/20 transition-all text-sm resize-none h-24"
+                  placeholder="Tell us about yourself..."
+                />
+              </div>
+
+              {editError && (
+                <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-sm font-medium">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  {editError}
+                </div>
+              )}
+
+              {editSuccess && (
+                <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-500 text-sm font-medium">
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  {editSuccess}
+                </div>
+              )}
+
+              <button 
+                type="submit"
+                disabled={editLoading}
+                className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-2xl font-black uppercase tracking-tighter hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {editLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Changes'}
+              </button>
+            </form>
+          </motion.div>
+        </div>
       )}
     </div>
   );

@@ -9,6 +9,8 @@ import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
 import CommentsModal from '../components/CommentsModal';
 import PostCard from '../components/PostCard';
+import ConfirmModal from '../components/ConfirmModal';
+import { aiVision } from '../services/aiService';
 
 interface Post {
   id: string;
@@ -49,6 +51,8 @@ export default function Feed() {
   const [following, setFollowing] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<'trending' | 'recent'>('trending');
   const [rescanningId, setRescanningId] = useState<string | null>(null);
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
+  const [rescanPost, setRescanPost] = useState<Post | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -238,6 +242,7 @@ export default function Feed() {
           return next;
         });
       }
+      console.error('Like error:', error);
       handleFirestoreError(error, OperationType.WRITE, `likes/${likeId}`);
     }
   };
@@ -268,17 +273,18 @@ export default function Feed() {
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!window.confirm('Are you sure you want to delete this post?')) return;
+  const handleDeletePost = async () => {
+    if (!deletePostId) return;
     try {
-      await deleteDoc(doc(db, 'posts', postId));
+      await deleteDoc(doc(db, 'posts', deletePostId));
       if (user) {
         await updateDoc(doc(db, 'users', user.uid), {
           postsCount: increment(-1)
         });
       }
+      setDeletePostId(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
+      handleFirestoreError(error, OperationType.DELETE, `posts/${deletePostId}`);
     }
   };
 
@@ -292,12 +298,14 @@ export default function Feed() {
     }
   };
 
-  const handleRescan = async (post: Post) => {
-    if (!window.confirm('Are you sure you want to rescan this image? This will update the nutritional information.')) return;
-    setRescanningId(post.id);
+  const handleRescan = async () => {
+    if (!rescanPost) return;
+    setRescanningId(rescanPost.id);
+    const postToRescan = rescanPost;
+    setRescanPost(null);
     try {
-      const base64Data = post.imageUrl.split(',')[1] || post.imageUrl;
-      const mimeType = post.imageUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+      const base64Data = postToRescan.imageUrl.split(',')[1] || postToRescan.imageUrl;
+      const mimeType = postToRescan.imageUrl.split(';')[0].split(':')[1] || 'image/jpeg';
       
       const prompt = `Analyze this food image. Provide the following information in a JSON format:
       - foodType: Name of the food
@@ -318,7 +326,7 @@ export default function Feed() {
         const cleanedText = response.replace(/```json/gi, '').replace(/```/g, '').trim();
         const parsedResult = JSON.parse(cleanedText);
         
-        await updateDoc(doc(db, 'posts', post.id), {
+        await updateDoc(doc(db, 'posts', postToRescan.id), {
           foodType: parsedResult.foodType,
           category: parsedResult.category,
           healthRating: parsedResult.healthRating,
@@ -328,15 +336,15 @@ export default function Feed() {
           carbs: parsedResult.carbs,
           fat: parsedResult.fat,
         });
-        alert('Post successfully rescanned and updated!');
+        // alert('Post successfully rescanned and updated!');
       }
     } catch (error: any) {
       console.error('Rescan failed:', error);
-      if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
-        alert('AI Quota Exceeded: Insufficient balance in OpenAI account. Please check your billing details.');
-      } else {
-        alert('Failed to rescan image. Please try again later.');
-      }
+      // if (error.message?.toLowerCase().includes('insufficient balance') || error.message?.includes('402')) {
+      //   alert('AI Quota Exceeded: Insufficient balance in OpenAI account. Please check your billing details.');
+      // } else {
+      //   alert('Failed to rescan image. Please try again later.');
+      // }
     } finally {
       setRescanningId(null);
     }
@@ -394,14 +402,32 @@ export default function Feed() {
             onFollow={handleFollow}
             onLike={handleLike}
             onSave={handleSave}
-            onDelete={handleDeletePost}
+            onDelete={setDeletePostId}
             onSaveCaption={handleSaveCaption}
-            onRescan={handleRescan}
+            onRescan={setRescanPost}
             onOpenComments={(postId, authorId) => setCommentsModalPost({ id: postId, authorId })}
             rescanningId={rescanningId}
           />
         ))
       )}
+
+      <ConfirmModal
+        isOpen={!!deletePostId}
+        title="Delete Post"
+        message="Are you sure you want to delete this post? This action cannot be undone."
+        onConfirm={handleDeletePost}
+        onCancel={() => setDeletePostId(null)}
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!rescanPost}
+        title="Rescan Image"
+        message="Are you sure you want to rescan this image? This will update the nutritional information."
+        onConfirm={handleRescan}
+        onCancel={() => setRescanPost(null)}
+        confirmText="Rescan"
+      />
 
       {commentsModalPost && (
         <CommentsModal

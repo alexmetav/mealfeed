@@ -106,7 +106,11 @@ export default function Messages() {
   }, [user, profile, toUserId]);
 
   useEffect(() => {
-    if (!activeChat || !activeChat.id) return;
+    const isNewChat = activeChat?.lastMessageTime === null;
+    if (!activeChat || !activeChat.id || isNewChat) {
+      setMessages([]);
+      return;
+    }
 
     const q = query(
       collection(db, `chats/${activeChat.id}/messages`),
@@ -120,7 +124,7 @@ export default function Messages() {
     });
 
     return () => unsub();
-  }, [activeChat?.id]);
+  }, [activeChat?.id, activeChat?.lastMessageTime]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,10 +133,10 @@ export default function Messages() {
     setSending(true);
     try {
       const chatRef = doc(db, 'chats', activeChat.id);
-      const chatDoc = await getDoc(chatRef);
+      const isNewChat = activeChat.lastMessageTime === null;
       const isPremium = profile?.subscriptionPlan === 'premium' || profile?.subscriptionPlan === 'pro' || profile?.role === 'admin';
 
-      if (!chatDoc.exists()) {
+      if (isNewChat) {
         await setDoc(chatRef, {
           users: activeChat.users,
           userDetails: activeChat.userDetails,
@@ -142,6 +146,7 @@ export default function Messages() {
           createdBy: user.uid
         });
       } else {
+        const chatDoc = await getDoc(chatRef);
         const chatData = chatDoc.data();
         const updates: any = {
           lastMessage: newMessage,
@@ -149,7 +154,7 @@ export default function Messages() {
         };
 
         // If it was pending and a premium user sends a message, or if the recipient of the request replies
-        if (chatData.status === 'pending') {
+        if (chatData?.status === 'pending') {
           if (isPremium || chatData.createdBy !== user.uid) {
             updates.status = 'accepted';
           }

@@ -6,6 +6,7 @@ import LoadingScreen from './components/LoadingScreen';
 
 // Pages
 import Landing from './pages/Landing';
+import Auth from './pages/Auth';
 import DashboardLayout from './components/DashboardLayout';
 import Feed from './pages/Feed';
 import Upload from './pages/Upload';
@@ -46,6 +47,7 @@ export default function App() {
             <Router>
               <Routes>
                 <Route path="/" element={<Landing />} />
+                <Route path="/auth" element={<Auth />} />
                 
                 <Route path="/dashboard" element={
                   <ProtectedRoute>

@@ -11,8 +11,13 @@ export default function Health() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const isSubscribed = profile?.subscriptionPlan === 'pro' || profile?.subscriptionPlan === 'premium';
+
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isSubscribed) {
+      if (!isSubscribed) setLoading(false);
+      return;
+    }
 
     const fetchPosts = async () => {
       try {
@@ -35,6 +40,28 @@ export default function Health() {
 
   if (loading) {
     return <LoadingSpinner />;
+  }
+
+  if (!isSubscribed) {
+    return (
+      <div className="max-w-4xl mx-auto pb-24 flex flex-col items-center justify-center text-center space-y-8 py-20">
+        <div className="w-24 h-24 bg-yellow-500/10 rounded-full flex items-center justify-center border border-yellow-500/20 shadow-xl shadow-yellow-500/10">
+          <Activity className="w-12 h-12 text-yellow-500" />
+        </div>
+        <div className="space-y-4">
+          <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-white">Health Dashboard is Premium</h1>
+          <p className="text-zinc-500 dark:text-zinc-400 max-w-md mx-auto text-lg leading-relaxed">
+            Unlock your personalized health dashboard, meal breakdowns, and nutritional trends with a Pro or Premium subscription.
+          </p>
+        </div>
+        <a 
+          href="/dashboard/subscription"
+          className="px-10 py-4 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-2xl transition-all duration-300 shadow-lg shadow-yellow-900/20 hover:scale-105 active:scale-95"
+        >
+          View Subscription Plans
+        </a>
+      </div>
+    );
   }
 
   // Calculate stats
