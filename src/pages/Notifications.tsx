@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch, limit, getDocs, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Heart, MessageCircle, UserPlus, CheckCircle2, Bell, MessageSquare } from 'lucide-react';
+import { postgresService } from '../services/postgresService';
+import { Heart, MessageCircle, UserPlus, CheckCircle2, Bell, MessageSquare, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 
@@ -24,26 +25,148 @@ export default function Notifications() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const fetchNotifications = async (isInitial = true) => {
+    if (!user) return;
+    if (isInitial) setLoading(true);
+    
+    try {
+      const pageSize = 20;
+      const offset = isInitial ? 0 : notifications.length;
+      
+      const pgNotifications = await postgresService.getNotifications(user.uid, pageSize, offset);
+      const fetchedNotifications = pgNotifications.map(n => ({
+        id: n.id.toString(),
+        userId: n.user_id,
+        actorId: n.actor_id,
+        actorName: n.actor_name,
+        actorImage: n.actor_image || '',
+        type: n.type as any,
+        postId: n.post_id?.toString(),
+        message: n.message,
+        read: n.read,
+        createdAt: n.created_at
+      } as Notification));
+      
+      if (isInitial) {
+        setNotifications(fetchedNotifications);
+      } else {
+        setNotifications(prev => [...prev, ...fetchedNotifications]);
+      }
+
+      setHasMore(pgNotifications.length === pageSize);
+    } catch (error) {
+      console.error("Error fetching from Postgres, falling back to Firestore:", error);
+      try {
+        const pageSize = 20;
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          limit(pageSize)
+        );
+
+        const snapshot = await getDocs(q);
+        const fetchedNotifications = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+        
+        if (isInitial) {
+          setNotifications(fetchedNotifications);
+        } else {
+          setNotifications(prev => [...prev, ...fetchedNotifications]);
+        }
+
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === pageSize);
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.LIST, 'notifications');
+      }
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
+    fetchNotifications();
+
+    // Listen for NEW notifications only (real-time)
     if (!user) return;
-    
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(1)
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'notifications');
-      setLoading(false);
+      if (!snap.empty) {
+        const latest = { id: snap.docs[0].id, ...snap.docs[0].data() } as Notification;
+        setNotifications(prev => {
+          if (prev.find(n => n.id === latest.id)) return prev;
+          return [latest, ...prev];
+        });
+      }
     });
 
     return () => unsub();
   }, [user]);
+
+  const loadMore = async () => {
+    if (!user || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    
+    try {
+      const pageSize = 20;
+      const offset = notifications.length;
+      
+      const pgNotifications = await postgresService.getNotifications(user.uid, pageSize, offset);
+      const fetchedNotifications = pgNotifications.map(n => ({
+        id: n.id.toString(),
+        userId: n.user_id,
+        actorId: n.actor_id,
+        actorName: n.actor_name,
+        actorImage: n.actor_image || '',
+        type: n.type as any,
+        postId: n.post_id?.toString(),
+        message: n.message,
+        read: n.read,
+        createdAt: n.created_at
+      } as Notification));
+      
+      setNotifications(prev => [...prev, ...fetchedNotifications]);
+      setHasMore(pgNotifications.length === pageSize);
+    } catch (error) {
+      console.error("Error fetching more from Postgres, falling back to Firestore:", error);
+      try {
+        if (!lastVisible) {
+          setHasMore(false);
+          return;
+        }
+        const pageSize = 20;
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          startAfter(lastVisible),
+          limit(pageSize)
+        );
+
+        const snapshot = await getDocs(q);
+        const fetchedNotifications = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+        
+        setNotifications(prev => [...prev, ...fetchedNotifications]);
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === pageSize);
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.LIST, 'notifications');
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const markAsRead = async (notificationId: string) => {
     try {
@@ -149,6 +272,25 @@ export default function Notifications() {
               </div>
             </div>
           ))}
+
+          {hasMore && (
+            <div className="flex justify-center pt-4">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="px-8 py-3 bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-900 dark:text-white rounded-full text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2 border border-zinc-200 dark:border-white/10"
+              >
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Load More'
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

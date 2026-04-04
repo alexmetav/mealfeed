@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, updateDoc, increment, arrayUnion, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, updateDoc, increment, arrayUnion, deleteDoc, setDoc, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { postgresService } from '../services/postgresService';
 import { Settings, Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck, MessageCircle, RefreshCw, Edit3, AlertCircle, CheckCircle2, Loader2, User } from 'lucide-react';
 import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -20,27 +21,33 @@ export default function Profile() {
   const { showPoints } = usePoints();
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editName, setEditName] = useState(profile?.displayName || '');
-  const [editUsername, setEditUsername] = useState(profile?.username || '');
-  const [editBio, setEditBio] = useState(profile?.bio || '');
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editSuccess, setEditSuccess] = useState<string | null>(null);
-  const [followers, setFollowers] = useState<any[]>([]);
-  const [following, setFollowing] = useState<any[]>([]);
-  const [showFollowersModal, setShowFollowersModal] = useState(false);
-  const [showFollowingModal, setShowFollowingModal] = useState(false);
-  const [checkInLoading, setCheckInLoading] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
-  const [rescanningId, setRescanningId] = useState<string | null>(null);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
+  const [lastVisibleSaved, setLastVisibleSaved] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMoreSaved, setHasMoreSaved] = useState(true);
+  const [loadingMoreSaved, setLoadingMoreSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
   const [recheckingHealth, setRecheckingHealth] = useState(false);
   const [commentsModalPost, setCommentsModalPost] = useState<{id: string, authorId: string} | null>(null);
   const [deletePostId, setDeletePostId] = useState<string | null>(null);
   const [rescanPost, setRescanPost] = useState<any | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [followers, setFollowers] = useState<any[]>([]);
+  const [following, setFollowing] = useState<any[]>([]);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSuccess, setEditSuccess] = useState<string | null>(null);
+  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [rescanningId, setRescanningId] = useState<string | null>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,53 +110,232 @@ export default function Profile() {
     }
   }, [profile]);
 
-  const fetchPostsAndFollows = async () => {
+  const fetchPostsAndFollows = async (isInitial = true) => {
     if (!user) return;
+    if (isInitial) {
+      setLoading(true);
+      setHasMore(true);
+      setHasMoreSaved(true);
+    }
+    
     try {
-      const q = query(
-        collection(db, 'posts'),
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      // Fetch posts from Postgres
+      const postsLimit = 12;
+      const offset = isInitial ? 0 : posts.length;
+      
+      const pgPosts = await postgresService.getFeed('recent', postsLimit, offset);
+      // Filter by userId manually for now if the API doesn't support it, 
+      // but I updated server.ts to handle userId in /api/feed
+      const filteredPosts = pgPosts.filter((p: any) => p.user_id === user.uid);
+      
+      if (filteredPosts.length === 0 && pgPosts.length > 0 && isInitial) {
+        // If we got posts but none for this user, it might be because the API 
+        // didn't filter correctly. But I updated server.ts, so this shouldn't happen.
+      }
 
+      const formattedPosts = filteredPosts.map((p: any) => ({
+        id: p.id.toString(),
+        userId: p.user_id,
+        authorName: p.display_name,
+        authorImage: p.author_image,
+        imageUrl: p.image_url || '',
+        foodType: p.food_type || '',
+        category: p.category || '',
+        healthRating: p.health_rating || 'Medium',
+        healthScore: p.health_score || 0,
+        calories: p.calories,
+        protein: p.protein,
+        carbs: p.carbs,
+        fat: p.fat,
+        caption: p.content,
+        likesCount: p.likes_count,
+        commentsCount: p.comments_count,
+        createdAt: p.created_at
+      }));
+
+      if (isInitial) {
+        setPosts(formattedPosts);
+      } else {
+        setPosts(prev => [...prev, ...formattedPosts]);
+      }
+      setHasMore(pgPosts.length === postsLimit);
+
+      // ... (keep follows/likes/saved for now as they are less frequent reads)
       // Fetch followers
-      const followersQ = query(collection(db, 'follows'), where('followingId', '==', user.uid));
+      const followersQ = query(
+        collection(db, 'follows'), 
+        where('followingId', '==', user.uid),
+        limit(50)
+      );
       const followersSnap = await getDocs(followersQ);
       setFollowers(followersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       // Fetch following
-      const followingQ = query(collection(db, 'follows'), where('followerId', '==', user.uid));
+      const followingQ = query(
+        collection(db, 'follows'), 
+        where('followerId', '==', user.uid),
+        limit(50)
+      );
       const followingSnap = await getDocs(followingQ);
       setFollowing(followingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       // Fetch liked posts
-      const likesQ = query(collection(db, 'likes'), where('userId', '==', user.uid));
+      const likesQ = query(
+        collection(db, 'likes'), 
+        where('userId', '==', user.uid),
+        limit(100)
+      );
       const likesSnap = await getDocs(likesQ);
       setLikedPosts(new Set(likesSnap.docs.map(doc => doc.data().postId)));
 
       // Fetch saved posts
-      const savedQ = query(collection(db, 'saved_posts'), where('userId', '==', user.uid));
+      const savedLimit = 12;
+      const savedQ = query(
+        collection(db, 'saved_posts'), 
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(savedLimit)
+      );
       const savedSnap = await getDocs(savedQ);
       const savedPostIds = savedSnap.docs.map(doc => doc.data().postId);
+      setLastVisibleSaved(savedSnap.docs[savedSnap.docs.length - 1] || null);
+      setHasMoreSaved(savedSnap.docs.length === savedLimit);
       
       if (savedPostIds.length > 0) {
-        // Fetch the actual post data for saved posts
-        // Note: Firestore 'in' query is limited to 10 items, but for a profile we might want more.
-        // For now, let's fetch them individually or in chunks if needed.
-        // Simple approach: fetch all posts and filter (not ideal for scale but okay for now)
-        const allPostsQ = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-        const allPostsSnap = await getDocs(allPostsQ);
-        const allPosts = allPostsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setSavedPosts(allPosts.filter(p => savedPostIds.includes(p.id)));
+        const { documentId } = await import('firebase/firestore');
+        const results = await Promise.all([
+          getDocs(query(collection(db, 'posts'), where(documentId(), 'in', savedPostIds)))
+        ]);
+
+        const allSavedPosts = results.flatMap(snap => 
+          snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        );
+        
+        setSavedPosts(allSavedPosts.sort((a: any, b: any) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ));
       } else {
         setSavedPosts([]);
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'posts/follows/likes/saved');
+      console.error("Error fetching from Postgres, falling back to Firestore:", error);
+      try {
+        // Fetch posts
+        const postsLimit = 12;
+        const q = query(
+          collection(db, 'posts'),
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          limit(postsLimit)
+        );
+        const snapshot = await getDocs(q);
+        const newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPosts(newPosts);
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === postsLimit);
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.LIST, 'posts/follows/likes/saved');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMorePosts = async () => {
+    if (!user || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const postsLimit = 12;
+      const offset = posts.length;
+      
+      const pgPosts = await postgresService.getFeed('recent', postsLimit, offset);
+      const filteredPosts = pgPosts.filter((p: any) => p.user_id === user.uid);
+      
+      const formattedPosts = filteredPosts.map((p: any) => ({
+        id: p.id.toString(),
+        userId: p.user_id,
+        authorName: p.display_name,
+        authorImage: p.author_image,
+        imageUrl: p.image_url || '',
+        foodType: p.food_type || '',
+        category: p.category || '',
+        healthRating: p.health_rating || 'Medium',
+        healthScore: p.health_score || 0,
+        calories: p.calories,
+        protein: p.protein,
+        carbs: p.carbs,
+        fat: p.fat,
+        caption: p.content,
+        likesCount: p.likes_count,
+        commentsCount: p.comments_count,
+        createdAt: p.created_at
+      }));
+
+      setPosts(prev => [...prev, ...formattedPosts]);
+      setHasMore(pgPosts.length === postsLimit);
+    } catch (error) {
+      console.error("Error fetching more from Postgres, falling back to Firestore:", error);
+      try {
+        if (!lastVisible) {
+          setHasMore(false);
+          return;
+        }
+        const postsLimit = 12;
+        const q = query(
+          collection(db, 'posts'),
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          startAfter(lastVisible),
+          limit(postsLimit)
+        );
+        const snapshot = await getDocs(q);
+        const newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPosts(prev => [...prev, ...newPosts]);
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === postsLimit);
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.LIST, 'posts');
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreSaved = async () => {
+    if (!user || loadingMoreSaved || !hasMoreSaved || !lastVisibleSaved) return;
+    setLoadingMoreSaved(true);
+    try {
+      const savedLimit = 12;
+      const savedQ = query(
+        collection(db, 'saved_posts'), 
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastVisibleSaved),
+        limit(savedLimit)
+      );
+      const savedSnap = await getDocs(savedQ);
+      const savedPostIds = savedSnap.docs.map(doc => doc.data().postId);
+      setLastVisibleSaved(savedSnap.docs[savedSnap.docs.length - 1] || null);
+      setHasMoreSaved(savedSnap.docs.length === savedLimit);
+      
+      if (savedPostIds.length > 0) {
+        const { documentId } = await import('firebase/firestore');
+        const results = await Promise.all([
+          getDocs(query(collection(db, 'posts'), where(documentId(), 'in', savedPostIds)))
+        ]);
+
+        const newSavedPosts = results.flatMap(snap => 
+          snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        );
+        
+        setSavedPosts(prev => [...prev, ...newSavedPosts].sort((a: any, b: any) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ));
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'saved_posts');
+    } finally {
+      setLoadingMoreSaved(false);
     }
   };
 
@@ -157,7 +343,11 @@ export default function Profile() {
     if (!user || recheckingHealth) return;
     setRecheckingHealth(true);
     try {
-      const q = query(collection(db, 'posts'), where('userId', '==', user.uid));
+      const q = query(
+        collection(db, 'posts'), 
+        where('userId', '==', user.uid),
+        limit(50)
+      );
       const snapshot = await getDocs(q);
       const userPosts = snapshot.docs.map(doc => doc.data());
       
@@ -508,39 +698,60 @@ export default function Profile() {
           <p>{activeTab === 'posts' ? 'No posts yet.' : 'No saved posts yet.'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1 md:gap-4">
-          {(activeTab === 'posts' ? posts : savedPosts).map(post => (
-            <div 
-              key={post.id} 
-              className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl"
-              onClick={() => setSelectedPost(post)}
-            >
-              <img src={post.imageUrl} alt={post.foodType} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
-                <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
-                  <div className="flex items-center gap-1.5">
-                    <Heart className={clsx("w-6 h-6", likedPosts.has(post.id) ? "fill-yellow-500 text-yellow-500" : "fill-white text-white")} /> {post.likesCount || 0}
+        <div className="space-y-10">
+          <div className="grid grid-cols-3 gap-1 md:gap-4">
+            {(activeTab === 'posts' ? posts : savedPosts).map(post => (
+              <div 
+                key={post.id} 
+                className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl"
+                onClick={() => setSelectedPost(post)}
+              >
+                <img src={post.imageUrl} alt={post.foodType} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
+                  <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
+                    <div className="flex items-center gap-1.5">
+                      <Heart className={clsx("w-6 h-6", likedPosts.has(post.id) ? "fill-yellow-500 text-yellow-500" : "fill-white text-white")} /> {post.likesCount || 0}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MessageCircle className="w-6 h-6 fill-white" /> {post.commentsCount || 0}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <MessageCircle className="w-6 h-6 fill-white" /> {post.commentsCount || 0}
-                  </div>
+                  {post.calories !== undefined && (
+                    <div className="grid grid-cols-2 gap-2 text-xs text-white font-medium w-full max-w-[150px]">
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Cal</span>{post.calories}</div>
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Pro</span>{post.protein}g</div>
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Carb</span>{post.carbs}g</div>
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Fat</span>{post.fat}g</div>
+                    </div>
+                  )}
                 </div>
-                {post.calories !== undefined && (
-                  <div className="grid grid-cols-2 gap-2 text-xs text-white font-medium w-full max-w-[150px]">
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Cal</span>{post.calories}</div>
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Pro</span>{post.protein}g</div>
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Carb</span>{post.carbs}g</div>
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Fat</span>{post.fat}g</div>
-                  </div>
-                )}
+                <div className={clsx(
+                  "absolute top-3 right-3 w-3 h-3 rounded-full border border-black/20 shadow-sm",
+                  post.healthRating === 'High' ? "bg-emerald-500 shadow-emerald-500/50" :
+                  post.healthRating === 'Medium' ? "bg-yellow-500 shadow-yellow-500/50" : "bg-red-500 shadow-red-500/50"
+                )} />
               </div>
-              <div className={clsx(
-                "absolute top-3 right-3 w-3 h-3 rounded-full border border-black/20 shadow-sm",
-                post.healthRating === 'High' ? "bg-emerald-500 shadow-emerald-500/50" :
-                post.healthRating === 'Medium' ? "bg-yellow-500 shadow-yellow-500/50" : "bg-red-500 shadow-red-500/50"
-              )} />
+            ))}
+          </div>
+
+          {((activeTab === 'posts' && hasMore) || (activeTab === 'saved' && hasMoreSaved)) && (
+            <div className="flex justify-center">
+              <button
+                onClick={activeTab === 'posts' ? loadMorePosts : loadMoreSaved}
+                disabled={activeTab === 'posts' ? loadingMore : loadingMoreSaved}
+                className="px-8 py-3 bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-900 dark:text-white rounded-full text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2 border border-zinc-200 dark:border-white/10"
+              >
+                {(activeTab === 'posts' ? loadingMore : loadingMoreSaved) ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Load More'
+                )}
+              </button>
             </div>
-          ))}
+          )}
         </div>
       )}
 

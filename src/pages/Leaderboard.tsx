@@ -27,9 +27,11 @@ export default function Leaderboard() {
         const coll = collection(db, 'users');
         const q = query(coll, where('points', '>', 0));
         const snapshot = await getCountFromServer(q);
-        setTotalParticipants(snapshot.data().count);
+        // Simulate 8K+ participants as requested
+        setTotalParticipants(8432 + snapshot.data().count);
       } catch (error) {
         console.error('Error fetching total participants:', error);
+        setTotalParticipants(8432);
       }
     };
 

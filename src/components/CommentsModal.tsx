@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, doc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, setDoc, updateDoc, increment, limit } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { X, Send } from 'lucide-react';
@@ -38,7 +38,8 @@ export default function CommentsModal({ postId, postAuthorId, isOpen, onClose }:
 
     const q = query(
       collection(db, 'comments'),
-      where('postId', '==', postId)
+      where('postId', '==', postId),
+      limit(100)
     );
 
     const unsub = onSnapshot(q, (snap) => {

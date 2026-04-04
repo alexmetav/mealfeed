@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, increment, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, increment, setDoc, deleteDoc, limit, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck, ArrowLeft, MessageCircle } from 'lucide-react';
+import { Grid, Bookmark, Heart, X, Flame, Trophy, CalendarCheck, ArrowLeft, MessageCircle, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PostModal from '../components/PostModal';
@@ -17,6 +17,9 @@ export default function UserProfile() {
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [followers, setFollowers] = useState<any[]>([]);
   const [following, setFollowing] = useState<any[]>([]);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
@@ -50,16 +53,21 @@ export default function UserProfile() {
         }
 
         // Fetch posts
+        const postsLimit = 12;
         const q = query(
           collection(db, 'posts'),
           where('userId', '==', id),
-          orderBy('createdAt', 'desc')
+          orderBy('createdAt', 'desc'),
+          limit(postsLimit)
         );
         const snapshot = await getDocs(q);
-        setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setPosts(newPosts);
+        setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMore(snapshot.docs.length === postsLimit);
 
         // Fetch followers
-        const followersQ = query(collection(db, 'follows'), where('followingId', '==', id));
+        const followersQ = query(collection(db, 'follows'), where('followingId', '==', id), limit(50));
         const followersSnap = await getDocs(followersQ);
         const followersData = followersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
         setFollowers(followersData);
@@ -69,13 +77,13 @@ export default function UserProfile() {
           setIsFollowing(followersData.some((f: any) => f.followerId === user.uid));
           
           // Fetch liked posts
-          const likesQ = query(collection(db, 'likes'), where('userId', '==', user.uid));
+          const likesQ = query(collection(db, 'likes'), where('userId', '==', user.uid), limit(100));
           const likesSnap = await getDocs(likesQ);
           setLikedPosts(new Set(likesSnap.docs.map(doc => doc.data().postId)));
         }
 
         // Fetch following
-        const followingQ = query(collection(db, 'follows'), where('followerId', '==', id));
+        const followingQ = query(collection(db, 'follows'), where('followerId', '==', id), limit(50));
         const followingSnap = await getDocs(followingQ);
         setFollowing(followingSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
@@ -87,6 +95,30 @@ export default function UserProfile() {
 
     fetchUserData();
   }, [id, user, navigate]);
+
+  const loadMorePosts = async () => {
+    if (!id || loadingMore || !hasMore || !lastVisible) return;
+    setLoadingMore(true);
+    try {
+      const postsLimit = 12;
+      const q = query(
+        collection(db, 'posts'),
+        where('userId', '==', id),
+        orderBy('createdAt', 'desc'),
+        startAfter(lastVisible),
+        limit(postsLimit)
+      );
+      const snapshot = await getDocs(q);
+      const newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPosts(prev => [...prev, ...newPosts]);
+      setLastVisible(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === postsLimit);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'posts');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleLike = async (postId: string, authorId: string) => {
     if (!user || !profile) return;
@@ -339,39 +371,60 @@ export default function UserProfile() {
           <p>No posts yet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-1 md:gap-4">
-          {posts.map(post => (
-            <div 
-              key={post.id} 
-              className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl"
-              onClick={() => setSelectedPost(post)}
-            >
-              <img src={post.imageUrl} alt={post.foodType} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
-                <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
-                  <div className="flex items-center gap-1.5">
-                    <Heart className={clsx("w-6 h-6", likedPosts.has(post.id) ? "fill-yellow-500 text-yellow-500" : "fill-white text-white")} /> {post.likesCount || 0}
+        <div className="space-y-10">
+          <div className="grid grid-cols-3 gap-1 md:gap-4">
+            {posts.map(post => (
+              <div 
+                key={post.id} 
+                className="aspect-square bg-white dark:bg-[#1c1c1e] relative group overflow-hidden cursor-pointer md:rounded-2xl"
+                onClick={() => setSelectedPost(post)}
+              >
+                <img src={post.imageUrl} alt={post.foodType} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-4 backdrop-blur-sm p-4">
+                  <div className="flex items-center gap-4 font-bold text-white text-lg drop-shadow-md">
+                    <div className="flex items-center gap-1.5">
+                      <Heart className={clsx("w-6 h-6", likedPosts.has(post.id) ? "fill-yellow-500 text-yellow-500" : "fill-white text-white")} /> {post.likesCount || 0}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MessageCircle className="w-6 h-6 fill-white" /> {post.commentsCount || 0}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <MessageCircle className="w-6 h-6 fill-white" /> {post.commentsCount || 0}
-                  </div>
+                  {post.calories !== undefined && (
+                    <div className="grid grid-cols-2 gap-2 text-xs text-white font-medium w-full max-w-[150px]">
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Cal</span>{post.calories}</div>
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Pro</span>{post.protein}g</div>
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Carb</span>{post.carbs}g</div>
+                      <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Fat</span>{post.fat}g</div>
+                    </div>
+                  )}
                 </div>
-                {post.calories !== undefined && (
-                  <div className="grid grid-cols-2 gap-2 text-xs text-white font-medium w-full max-w-[150px]">
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Cal</span>{post.calories}</div>
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Pro</span>{post.protein}g</div>
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Carb</span>{post.carbs}g</div>
-                    <div className="bg-white/10 rounded px-2 py-1 text-center"><span className="text-zinc-400 block text-[10px] uppercase">Fat</span>{post.fat}g</div>
-                  </div>
-                )}
+                <div className={clsx(
+                  "absolute top-3 right-3 w-3 h-3 rounded-full border border-black/20 shadow-sm",
+                  post.healthRating === 'High' ? "bg-emerald-500 shadow-emerald-500/50" :
+                  post.healthRating === 'Medium' ? "bg-yellow-500 shadow-yellow-500/50" : "bg-red-500 shadow-red-500/50"
+                )} />
               </div>
-              <div className={clsx(
-                "absolute top-3 right-3 w-3 h-3 rounded-full border border-black/20 shadow-sm",
-                post.healthRating === 'High' ? "bg-emerald-500 shadow-emerald-500/50" :
-                post.healthRating === 'Medium' ? "bg-yellow-500 shadow-yellow-500/50" : "bg-red-500 shadow-red-500/50"
-              )} />
+            ))}
+          </div>
+
+          {hasMore && (
+            <div className="flex justify-center">
+              <button
+                onClick={loadMorePosts}
+                disabled={loadingMore}
+                className="px-8 py-3 bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-900 dark:text-white rounded-full text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2 border border-zinc-200 dark:border-white/10"
+              >
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Load More'
+                )}
+              </button>
             </div>
-          ))}
+          )}
         </div>
       )}
 

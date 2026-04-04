@@ -28,6 +28,15 @@
   100% { top: 100%; }
 }
 
+@keyframes progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+.animate-progress {
+  animation: progress 3s linear forwards;
+}
+
 .animate-scan {
   animation: scan 2s ease-in-out infinite alternate;
 }

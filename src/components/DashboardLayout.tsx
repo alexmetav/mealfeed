@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Home, Compass, PlusSquare, MessageSquare, Bookmark, User, Activity, CreditCard, Settings, Shield, LogOut, Sun, Moon, Trophy, Utensils, Menu, X, Bell, Medal, Lock } from 'lucide-react';
 import clsx from 'clsx';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function DashboardLayout() {
@@ -16,7 +16,12 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'notifications'), where('userId', '==', user.uid), where('read', '==', false));
+    const q = query(
+      collection(db, 'notifications'), 
+      where('userId', '==', user.uid), 
+      where('read', '==', false),
+      limit(100)
+    );
     const unsub = onSnapshot(q, (snap) => {
       setUnreadCount(snap.docs.length);
     }, (error) => {

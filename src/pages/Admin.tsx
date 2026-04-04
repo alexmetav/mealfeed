@@ -26,8 +26,8 @@ export default function Admin() {
 
   const fetchAdminData = async () => {
     try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc')));
+      const usersSnap = await getDocs(query(collection(db, 'users'), limit(100)));
+      const postsSnap = await getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(100)));
       
       const allPosts = postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -121,7 +121,7 @@ export default function Admin() {
     if (!broadcastText.trim() || !adminUser) return;
     setBroadcasting(true);
     try {
-      const usersSnap = await getDocs(collection(db, 'users'));
+      const usersSnap = await getDocs(query(collection(db, 'users'), limit(500)));
       const batch = usersSnap.docs.map(userDoc => {
         return addDoc(collection(db, 'notifications'), {
           userId: userDoc.id,

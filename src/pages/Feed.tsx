@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, doc, updateDoc, increment, setDoc, deleteDoc, where, startAfter, getDocs, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-import { Heart, MessageCircle, Bookmark, MapPin, MoreVertical, Trash2, Edit2, RefreshCw } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, MoreVertical, Trash2, Edit2, RefreshCw, ArrowUp } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import clsx from 'clsx';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -11,6 +11,8 @@ import CommentsModal from '../components/CommentsModal';
 import PostCard from '../components/PostCard';
 import ConfirmModal from '../components/ConfirmModal';
 import { aiVision } from '../services/aiService';
+import { postgresService } from '../services/postgresService';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Post {
   id: string;
@@ -46,6 +48,9 @@ export default function Feed() {
   const { showPoints } = usePoints();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
   const [following, setFollowing] = useState<Set<string>>(new Set());
@@ -53,10 +58,52 @@ export default function Feed() {
   const [rescanningId, setRescanningId] = useState<string | null>(null);
   const [deletePostId, setDeletePostId] = useState<string | null>(null);
   const [rescanPost, setRescanPost] = useState<Post | null>(null);
+  const [quota, setQuota] = useState(100); // Simulate 100 read/write units
+  const [isQuotaLoading, setIsQuotaLoading] = useState(false);
+  const [showNewPostNotification, setShowNewPostNotification] = useState(false);
+
+  // Simulate high traffic by adding new posts periodically
+  useEffect(() => {
+    if (activeTab !== 'recent' || isSavedPage) return;
+
+    const interval = setInterval(() => {
+      setPosts(prev => {
+        if (prev.length === 0) return prev;
+        // Shuffle existing posts to simulate new activity
+        const shuffled = [...prev].sort(() => Math.random() - 0.5);
+        
+        // Show notification that someone posted fresh
+        if (Math.random() > 0.5) {
+          setShowNewPostNotification(true);
+          setTimeout(() => setShowNewPostNotification(false), 4000);
+        }
+        
+        return shuffled;
+      });
+    }, 5000); // Shuffle every 5 seconds to simulate "new" activity
+
+    return () => clearInterval(interval);
+  }, [activeTab, isSavedPage]);
+
+  // Quota simulation logic
+  const consumeQuota = (amount: number) => {
+    setQuota(prev => {
+      const next = prev - amount;
+      if (next <= 0) {
+        setIsQuotaLoading(true);
+        setTimeout(() => {
+          setQuota(100);
+          setIsQuotaLoading(false);
+        }, 2000); // Reset after 2 seconds
+        return 0;
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'follows'), where('followerId', '==', user.uid));
+    const q = query(collection(db, 'follows'), where('followerId', '==', user.uid), limit(100));
     const unsub = onSnapshot(q, (snap) => {
       setFollowing(new Set(snap.docs.map(d => d.data().followingId)));
     });
@@ -65,7 +112,7 @@ export default function Feed() {
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'likes'), where('userId', '==', user.uid));
+    const q = query(collection(db, 'likes'), where('userId', '==', user.uid), limit(100));
     const unsub = onSnapshot(q, (snap) => {
       setLikedPosts(new Set(snap.docs.map(d => d.data().postId)));
     });
@@ -74,7 +121,7 @@ export default function Feed() {
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'saved_posts'), where('userId', '==', user.uid));
+    const q = query(collection(db, 'saved_posts'), where('userId', '==', user.uid), limit(100));
     const unsub = onSnapshot(q, (snap) => {
       setSavedPosts(new Set(snap.docs.map(d => d.data().postId)));
     });
@@ -82,33 +129,220 @@ export default function Feed() {
   }, [user]);
 
   useEffect(() => {
-    setLoading(true);
-    let q;
-    if (isSavedPage) {
-      // We'll fetch all posts and filter in memory for simplicity if there are few saved posts,
-      // or we could do a more complex query. For now, let's fetch based on savedPosts set.
-      q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(100));
-    } else if (activeTab === 'trending') {
-      q = query(collection(db, 'posts'), orderBy('likesCount', 'desc'), limit(50));
-    } else {
-      q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50));
-    }
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      let newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post));
-      
-      if (isSavedPage) {
-        newPosts = newPosts.filter(post => savedPosts.has(post.id));
+    const fetchPosts = async (isInitial = true) => {
+      if (isInitial) {
+        setLoading(true);
+        setPosts([]);
+        setLastVisible(null);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
       }
-      
-      setPosts(newPosts);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'posts');
-    });
 
-    return () => unsubscribe();
+      consumeQuota(10); // Consume quota for fetching
+
+      try {
+        if (isSavedPage) {
+          // ... (keep saved posts logic for now as it's more complex to move)
+          if (savedPosts.size === 0) {
+            setPosts([]);
+            setLoading(false);
+            setHasMore(false);
+            return;
+          }
+          
+          const savedPostIds = Array.from(savedPosts);
+          const chunks = [];
+          for (let i = 0; i < savedPostIds.length; i += 10) {
+            chunks.push(savedPostIds.slice(i, i + 10));
+          }
+
+          const { documentId } = await import('firebase/firestore');
+          const results = await Promise.all(chunks.map(chunk => 
+            getDocs(query(collection(db, 'posts'), where(documentId(), 'in', chunk)))
+          ));
+
+          const allSavedPosts = results.flatMap(snap => 
+            snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Post))
+          );
+          
+          setPosts(allSavedPosts.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          ));
+          setHasMore(false);
+        } else {
+          // FETCH FROM POSTGRESQL
+          const offset = isInitial ? 0 : posts.length;
+          const pgPosts = await postgresService.getFeed(activeTab, 10, offset);
+          
+          if (pgPosts.length === 0) {
+            setHasMore(false);
+          } else {
+            const formattedPosts = pgPosts.map(p => ({
+              id: p.id.toString(),
+              userId: p.user_id,
+              authorName: p.display_name,
+              authorImage: p.author_image,
+              imageUrl: p.image_url || '',
+              foodType: p.food_type || '',
+              category: p.category || '',
+              healthRating: p.health_rating || 'Medium',
+              healthScore: p.health_score || 0,
+              calories: p.calories,
+              protein: p.protein,
+              carbs: p.carbs,
+              fat: p.fat,
+              caption: p.content,
+              likesCount: p.likes_count,
+              commentsCount: p.comments_count,
+              createdAt: p.created_at
+            } as Post));
+
+            setPosts(prev => isInitial ? formattedPosts : [...prev, ...formattedPosts]);
+            setHasMore(pgPosts.length === 10);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching from Postgres, falling back to Firestore:", error);
+        // Fallback to Firestore if Postgres fails (e.g. not configured)
+        try {
+          let q;
+          const postsLimit = 10;
+          
+          if (activeTab === 'trending') {
+            q = query(
+              collection(db, 'posts'), 
+              orderBy('likesCount', 'desc'), 
+              orderBy('createdAt', 'desc'),
+              limit(postsLimit)
+            );
+          } else {
+            q = query(
+              collection(db, 'posts'), 
+              orderBy('createdAt', 'desc'), 
+              limit(postsLimit)
+            );
+          }
+
+          if (!isInitial && lastVisible) {
+            q = query(q, startAfter(lastVisible));
+          }
+
+          const snapshot = await getDocs(q);
+          
+          if (snapshot.empty) {
+            setHasMore(false);
+          } else {
+            const newPosts = snapshot.docs.map(doc => {
+              const data = doc.data() as any;
+              return { id: doc.id, ...data } as Post;
+            });
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+            setPosts(prev => isInitial ? newPosts : [...prev, ...newPosts]);
+            setHasMore(snapshot.docs.length === postsLimit);
+          }
+        } catch (fsError) {
+          handleFirestoreError(fsError, OperationType.LIST, 'posts');
+        }
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    };
+
+    fetchPosts();
   }, [activeTab, isSavedPage, savedPosts]);
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || isQuotaLoading) return;
+    
+    setLoadingMore(true);
+    consumeQuota(5); // Consume quota for loading more
+    try {
+      if (isSavedPage) {
+        // Saved posts pagination is not yet implemented for Postgres
+        setHasMore(false);
+        return;
+      }
+
+      // FETCH FROM POSTGRESQL
+      const offset = posts.length;
+      const pgPosts = await postgresService.getFeed(activeTab, 10, offset);
+      
+      if (pgPosts.length === 0) {
+        setHasMore(false);
+      } else {
+        const formattedPosts = pgPosts.map(p => ({
+          id: p.id.toString(),
+          userId: p.user_id,
+          authorName: p.display_name,
+          authorImage: p.author_image,
+          imageUrl: p.image_url || '',
+          foodType: p.food_type || '',
+          category: p.category || '',
+          healthRating: p.health_rating || 'Medium',
+          healthScore: p.health_score || 0,
+          calories: p.calories,
+          protein: p.protein,
+          carbs: p.carbs,
+          fat: p.fat,
+          caption: p.content,
+          likesCount: p.likes_count,
+          commentsCount: p.comments_count,
+          createdAt: p.created_at
+        } as Post));
+
+        setPosts(prev => [...prev, ...formattedPosts]);
+        setHasMore(pgPosts.length === 10);
+      }
+    } catch (error) {
+      console.error("Error fetching more from Postgres, falling back to Firestore:", error);
+      // Fallback to Firestore
+      try {
+        if (!lastVisible) {
+          setHasMore(false);
+          return;
+        }
+        let q;
+        const postsLimit = 10;
+        
+        if (activeTab === 'trending') {
+          q = query(
+            collection(db, 'posts'), 
+            orderBy('likesCount', 'desc'), 
+            orderBy('createdAt', 'desc'),
+            startAfter(lastVisible),
+            limit(postsLimit)
+          );
+        } else {
+          q = query(
+            collection(db, 'posts'), 
+            orderBy('createdAt', 'desc'), 
+            startAfter(lastVisible),
+            limit(postsLimit)
+          );
+        }
+
+        const snapshot = await getDocs(q);
+        
+        if (snapshot.empty) {
+          setHasMore(false);
+        } else {
+          const newPosts = snapshot.docs.map(doc => {
+            const data = doc.data() as any;
+            return { id: doc.id, ...data } as Post;
+          });
+          setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+          setPosts(prev => [...prev, ...newPosts]);
+          setHasMore(snapshot.docs.length === postsLimit);
+        }
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.LIST, 'posts');
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleFollow = async (authorId: string, authorName: string, authorImage?: string) => {
     if (!user || !profile || authorId === user.uid) return;
@@ -352,12 +586,59 @@ export default function Feed() {
 
   const [commentsModalPost, setCommentsModalPost] = useState<{id: string, authorId: string} | null>(null);
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setShowNewPostNotification(false);
+  };
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (loading || !hasMore || loadingMore || isQuotaLoading) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    const target = document.getElementById('infinite-scroll-trigger');
+    if (target) observer.observe(target);
+
+    return () => {
+      if (target) observer.unobserve(target);
+    };
+  }, [loading, hasMore, loadingMore, isQuotaLoading, posts]);
+
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 pb-24 font-sans">
+    <div className="max-w-2xl mx-auto space-y-8 pb-24 font-sans relative">
+      <AnimatePresence>
+        {showNewPostNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, x: '-50%' }}
+            onClick={scrollToTop}
+            className="fixed top-24 left-1/2 z-[100] cursor-pointer"
+          >
+            <div className="bg-yellow-500 text-white px-6 py-3 rounded-full shadow-2xl shadow-yellow-500/40 flex items-center gap-3 border border-yellow-400/50 backdrop-blur-md">
+              <div className="relative">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-white" />
+              </div>
+              <span className="text-sm font-bold tracking-tight">Someone just posted fresh!</span>
+              <ArrowUp className="w-4 h-4" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex items-center justify-between mb-10">
         <h1 className="text-3xl font-semibold tracking-tight text-zinc-900 dark:text-white">
           {isSavedPage ? 'Saved Posts' : 'Global Feed'}
@@ -391,24 +672,40 @@ export default function Feed() {
           <p>{isSavedPage ? 'No saved posts yet.' : 'No posts yet. Be the first to upload!'}</p>
         </div>
       ) : (
-        posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            currentUserId={user?.uid}
-            isFollowing={following.has(post.userId)}
-            isLiked={likedPosts.has(post.id)}
-            isSaved={savedPosts.has(post.id)}
-            onFollow={handleFollow}
-            onLike={handleLike}
-            onSave={handleSave}
-            onDelete={setDeletePostId}
-            onSaveCaption={handleSaveCaption}
-            onRescan={setRescanPost}
-            onOpenComments={(postId, authorId) => setCommentsModalPost({ id: postId, authorId })}
-            rescanningId={rescanningId}
-          />
-        ))
+        <>
+          <div className="space-y-8">
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={user?.uid}
+                isFollowing={following.has(post.userId)}
+                isLiked={likedPosts.has(post.id)}
+                isSaved={savedPosts.has(post.id)}
+                onFollow={handleFollow}
+                onLike={handleLike}
+                onSave={handleSave}
+                onDelete={setDeletePostId}
+                onSaveCaption={handleSaveCaption}
+                onRescan={setRescanPost}
+                onOpenComments={(postId, authorId) => setCommentsModalPost({ id: postId, authorId })}
+                rescanningId={rescanningId}
+              />
+            ))}
+            <div id="infinite-scroll-trigger" className="h-10" />
+          </div>
+
+          {(loadingMore || isQuotaLoading) && (
+            <div className="flex justify-center py-8">
+              <div className="flex flex-col items-center gap-3">
+                <RefreshCw className="w-8 h-8 animate-spin text-zinc-400" />
+                <p className="text-sm font-medium text-zinc-500 animate-pulse">
+                  {isQuotaLoading ? 'Quota limit reached. Loading next set...' : 'Fetching more delicious meals...'}
+                </p>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <ConfirmModal

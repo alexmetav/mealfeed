@@ -41,6 +41,8 @@ export default function Upload() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [quota, setQuota] = useState(100);
+  const [isQuotaLoading, setIsQuotaLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -292,11 +294,27 @@ export default function Upload() {
     setIsAnalyzing(false);
   };
 
+  const consumeQuota = (amount: number) => {
+    setQuota(prev => {
+      const next = prev - amount;
+      if (next <= 0) {
+        setIsQuotaLoading(true);
+        setTimeout(() => {
+          setQuota(100);
+          setIsQuotaLoading(false);
+        }, 3000); // Reset after 3 seconds for writes
+        return 0;
+      }
+      return next;
+    });
+  };
+
   const handlePost = async () => {
-    if (!user || !profile || !image || !analysis) return;
+    if (!user || !profile || !image || !analysis || isQuotaLoading) return;
     
     setLoading(true);
     setError(null);
+    consumeQuota(25); // High cost for write operation
 
     try {
       // Anti-spam check
@@ -588,6 +606,23 @@ export default function Upload() {
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {isQuotaLoading && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-[#1c1c1e] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-zinc-200 dark:border-white/10">
+            <div className="w-20 h-20 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-yellow-500/20">
+              <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
+            </div>
+            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">Quota Limit Reached</h2>
+            <p className="text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
+              High traffic detected. We are processing your request. Please wait a moment...
+            </p>
+            <div className="w-full bg-zinc-100 dark:bg-white/10 h-2 rounded-full overflow-hidden">
+              <div className="bg-yellow-500 h-full animate-progress" />
+            </div>
+          </div>
         </div>
       )}
 
